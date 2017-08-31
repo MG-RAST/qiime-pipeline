@@ -1,0 +1,3 @@
+[submodule "ebi-metagenomics-cwl"]
+	path = ebi-metagenomics-cwl
+	url = https://github.com/ProteinsWebTeam/ebi-metagenomics-cwl.git
