@@ -6,6 +6,7 @@ MAINTAINER The MG-RAST team, help@mg-rast.org
 RUN apt-get update && apt-get install -y \
     build-essential \
     python-dev \
+    python-tk \
     python-pip
 
 ### install CWL runner and QIIME
