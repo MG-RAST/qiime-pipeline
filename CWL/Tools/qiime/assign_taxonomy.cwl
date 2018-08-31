@@ -1,10 +1,12 @@
 #!/usr/bin/env cwl-runner
 cwlVersion: v1.0
 class: CommandLineTool
+
 requirements:
   ResourceRequirement:
     coresMax: 1
     ramMin: 1024  # just a default, could be lowered
+
 hints:
  SoftwareRequirement:
    packages:
@@ -12,7 +14,8 @@ hints:
        specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
        version: [ "1.9.1" ]
 
-
+stderr: assign_taxonomy.error
+stdout: assign_taxonomy.out
 
 baseCommand: assign_taxonomy.py
 
@@ -55,6 +58,10 @@ arguments:
 
 
 outputs:
+  stdout:
+    type: stdout
+  stderr:
+    type: stderr  
   results:
     type: Directory
     outputBinding: 

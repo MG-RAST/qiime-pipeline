@@ -1,18 +1,23 @@
 #!/usr/bin/env cwl-runner
 cwlVersion: v1.0
 class: CommandLineTool
+
 requirements:
   ResourceRequirement:
     coresMax: 1
-    ramMin: 1024  # just a default, could be lowered
+    ramMin: 2048  # just a default, could be lowered
+
 hints:
- SoftwareRequirement:
-   packages:
-     qiime:
-       specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
-       version: [ "1.9.1" ]
+
+  SoftwareRequirement:
+    packages:
+      qiime:
+        specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
+        version: [ "1.9.1" ]
 
 
+stderr: pick_de_novo_otus.error
+stdout: pick_de_novo_otus.out
 
 baseCommand: pick_de_novo_otus.py
 
@@ -31,12 +36,16 @@ arguments:
  - --force  
 
 outputs:
+  stdout: 
+    type: stdout
+  stderr:
+    type: stderr  
   results:
     type: Directory
     outputBinding: 
       glob: otus
   representative_set:
-    type: File
+    type: File?
     outputBinding:
       glob: otus/rep_set/seqs_rep_set.fasta
   uclust:   
@@ -45,15 +54,15 @@ outputs:
       name: uclust
       fields:
         taxonomy:
-          type: File
+          type: File?
           outputBinding:
             glob: otus/uclust_assigned_taxonomy/seqs_rep_set_tax_assignments.txt
         cluster:
-          type: File
+          type: File?
           outputBinding:
             glob: otus/uclust_picked_otus/seqs_clusters.uc
         otus:
-          type: File
+          type: File?
           outputBinding:
             glob: otus/uclust_picked_otus/seqs_otus.txt          
   

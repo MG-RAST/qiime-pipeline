@@ -15,6 +15,8 @@ hints:
        version: [ "1.9.1" ]
 
 
+stderr: sort_otu_table.error
+stdout: sort_otu_table.out
 
 baseCommand: sort_otu_table.py
 # -i / convert_biom_output_biom/otu_table_gg_from_biom_w_taxonomy.biom
@@ -43,6 +45,10 @@ inputs:
 
 
 outputs:
+  stdout:
+    type: stdout
+  stderr:
+    type: stderr
   table:
     type: File
     outputBinding:

@@ -13,6 +13,8 @@ hints:
        version: [ "1.9.1" ]
 
 
+stderr: make_otu_table.error
+stdout: make_otu_table.out
 
 baseCommand: make_otu_table.py
 
@@ -21,7 +23,7 @@ baseCommand: make_otu_table.py
 inputs:
   otu-mapping:
    type: File
-   doc: fasta file
+   doc: cluster ID to sequence IDs mapping, two column 
    inputBinding:
      prefix: --otu_map_fp
   taxonomy-assignment:
@@ -39,6 +41,10 @@ arguments:
 
 
 outputs:
+  stdout:
+    type: stdout
+  stderr:
+    type: stderr  
   table:
     type: File
     outputBinding:
