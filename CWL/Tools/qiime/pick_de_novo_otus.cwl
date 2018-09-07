@@ -45,9 +45,9 @@ outputs:
     outputBinding: 
       glob: otus
   representative_set:
-    type: File?
+    type: File
     outputBinding:
-      glob: otus/rep_set/seqs_rep_set.fasta
+      glob: otus/rep_set/*_rep_set.fasta
   uclust:   
     type:
       type: record
@@ -56,15 +56,15 @@ outputs:
         taxonomy:
           type: File?
           outputBinding:
-            glob: otus/uclust_assigned_taxonomy/seqs_rep_set_tax_assignments.txt
+            glob: otus/uclust_assigned_taxonomy/*_rep_set_tax_assignments.txt
         cluster:
           type: File?
           outputBinding:
-            glob: otus/uclust_picked_otus/seqs_clusters.uc
+            glob: otus/uclust_picked_otus/*_clusters.uc
         otus:
           type: File?
           outputBinding:
-            glob: otus/uclust_picked_otus/seqs_otus.txt          
+            glob: otus/uclust_picked_otus/*_otus.txt          
   
   
 $namespaces:

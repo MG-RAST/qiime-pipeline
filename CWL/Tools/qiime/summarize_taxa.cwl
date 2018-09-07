@@ -15,6 +15,8 @@ hints:
        version: [ "1.9.1" ]
 
 
+stderr: summarize_taxa.error
+stdout: summarize_taxa.out
 
 baseCommand: summarize_taxa.py
 # -i /filter_otus_from_otu_table_output/seqs_otu_table_gg_ w_taxonomy_sorted.biom
@@ -34,6 +36,7 @@ inputs:
      prefix: --otu_table_fp
   taxonomic-level:
     type: int[]
+    default: [ 2,3,4,5,6,7 ]
     inputBinding:
       prefix: --level
       itemSeparator: ","
@@ -56,6 +59,10 @@ outputs:
   #   type: Directory
   #   outputBinding:
   #     glob: $(inputs.output)
+  stderr:
+    type: stderr
+  stdout: 
+    type: stdout  
   biom:
     type: File[]?
     outputBinding:

@@ -6,6 +6,18 @@ requirements:
     coresMax: 1
     ramMin: 1024  # just a default, could be lowered
   InlineJavascriptRequirement: {}
+  SchemaDefRequirement:
+    types:
+      - type: enum
+        name: level-type
+        symbols:
+          - Domain
+          - Phylum
+          - Class
+          - Order
+          - Family
+          - Genus
+          - Species
      
 hints:
  SoftwareRequirement:
@@ -15,6 +27,9 @@ hints:
        version: [ "1.9.1" ]
 
 
+
+stderr: plot_taxa_summary.error
+stdout: plot_taxa_summary.out
 
 baseCommand: plot_taxa_summary.py
 # -i /summarize_taxa_output/L2.txt,summarize_taxa_output/L3.txt,summarize_taxa_output/L4.txt,summarize_taxa_output/L5.txt,summarize_taxa_output/L6.txt,summarize_taxa_output/L7.txt
@@ -33,57 +48,41 @@ inputs:
    inputBinding:
      prefix: --counts_fname
      itemSeparator: ","
-  label:
+  labels:
     type: 
       - 'null'
-      - type: enum
-        symbols:
-          - Domain
-          - Phylum
-          - Class
-          - Order
-          - Family
-          - Genus
-          - Species
+      - level-type[]
 
     default: 'null'
     doc: |
       Comma-separated list of taxonomic levels (e.g.
       Phylum,Class,Order)  [default=none]
     inputBinding:
-      prefix: --level
+      prefix: --labels
       itemSeparator: ","
-  report-absolute-abundance:
-    type: boolean
-    default: true 
-    inputBinding:
-      prefix: --absolute_abundance     
+
   output:
     type: string
     default: ./results
     inputBinding:
       prefix: --dir_path
       
-  
+arguments:
+  - -s   
+  - prefix: --chart_type 
+    valueFrom: pie  
 
 
 outputs:
+  stderr:
+    type: stderr
+  stdout:
+    type: stdout  
   results:
-    type: Directory
+    type: Directory?
     outputBinding:
       glob: $(inputs.output)
-  biom:
-    type: File[]?
-    outputBinding:
-      glob: $(inputs.output)/*.biom
-  txt:
-    type:
-      type: array
-      items: 
-        - File
-        - 'null'
-    outputBinding:
-      glob: $(inputs.output)/*.txt          
+      
 
 
   

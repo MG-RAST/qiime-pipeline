@@ -69,7 +69,7 @@ outputs:
   id2taxonomy:
     type: File
     outputBinding:
-      glob: taxonomy/seqs_rep_set_tax_assignments.txt
+      glob: taxonomy/*_rep_set_tax_assignments.txt
  
 
   

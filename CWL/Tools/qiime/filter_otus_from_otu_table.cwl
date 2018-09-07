@@ -15,6 +15,8 @@ hints:
        version: [ "1.9.1" ]
 
 
+stderr: filter_otus_from_otu_table.error
+stdout: filter_otus_from_otu_table.out
 
 baseCommand: filter_otus_from_otu_table.py
 # -i /sort_otu_table_output/otu_table_gg_from_biom_w_taxonomy_sorted.biom
@@ -45,6 +47,10 @@ inputs:
 
 
 outputs:
+  stderr:
+    type: stderr
+  stdout:
+    type: stdout  
   table:
     type: File
     outputBinding:
