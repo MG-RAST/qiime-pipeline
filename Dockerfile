@@ -22,5 +22,11 @@ RUN pip install cwlref-runner \
                 numpy 
 RUN pip install qiime 
 
+# change global matplotlib config 
+# CWL changes $HOME / change to non interactive
+RUN sed -i -s "s/TkAgg/Agg/" /usr/local/lib/python2.7/dist-packages/matplotlib/mpl-data/matplotlibrc
+# RUN mkdir -p /root/.config/matplotlib
+# RUN echo "backend : Agg" > /root/.config/matplotlib/matplotlibrc
+
 # copy files into image
 # COPY mgcmd/* bin/* /usr/local/bin/
