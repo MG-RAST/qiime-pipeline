@@ -1,0 +1,3 @@
+fasta:
+  class: File
+  path: ../data/combined-three-samples.fna

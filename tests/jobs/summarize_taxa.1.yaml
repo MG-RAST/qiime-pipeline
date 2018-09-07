@@ -1,0 +1,4 @@
+otu-table:
+  class: File
+  path: ../data/filtered.biom
+taxonomic-level: [ 1,2 ]  

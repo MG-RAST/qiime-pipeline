@@ -1,0 +1,26 @@
+samples-fna:
+  class: File
+  path: ../data/combined-three-samples.fna
+
+sample-mapping:
+  class: File  
+  path: ../data/three-sample-mapping-file.txt
+
+# min-observations-per-otu: 2
+summarize-for-taxonomic-levels: 
+    numeric: [ 2,3,4,5,6,7 ]
+    labels: [ Domain , Phylum , Class , Order , Family , Genus , Species ]
+
+#  name:
+#         label: 
+#         run:
+#         in:
+#         out:
+
+
+# pick_de_novo_otus.py \
+#     --output_dir \
+#     otus \
+#     --force \
+#     --input_fp \
+#     /tmp/tmpr1gwDl/stgd82436df-84c6-47f7-8dc1-e242dfa62c9c/combined_seqs.fna

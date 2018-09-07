@@ -1,0 +1,15 @@
+taxa-counts-files:
+  - class: File
+    path: ../data/otu-biom-table-sorted_L2.txt
+  - class: File
+    path: ../data/otu-biom-table-sorted_L3.txt
+  - class: File
+    path: ../data/otu-biom-table-sorted_L4.txt
+  - class: File
+    path: ../data/otu-biom-table-sorted_L5.txt
+  - class: File
+    path: ../data/otu-biom-table-sorted_L6.txt   
+  - class: File
+    path: ../data/otu-biom-table-sorted_L7.txt   
+
+labels : [ Phylum , Class , Order , Family , Genus , Species ]  
