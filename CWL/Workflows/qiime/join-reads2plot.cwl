@@ -97,7 +97,7 @@ outputs:
 steps:
     validate-mapping:
         label:
-        run: ./../Tools/qiime/validate_mapping_file.cwl
+        run: ../../Tools/qiime/validate_mapping_file.cwl
         in:
             mapping: sample-mapping
         out: [stderr , corrected ]
@@ -180,7 +180,7 @@ steps:
 
     alpha-diversity:
         label: alpha diversity
-        run: ../../alpha_diversity.cwl
+        run: ../../Tools/qiime/alpha_diversity.cwl
         in: 
             otu-table: filter-otus/table
             method:
@@ -192,20 +192,20 @@ steps:
 
     beta-diversity:
         label: beta diversity
-        run: ../../beta_diversity_through_plots.cwl
+        run: ../../Tools/qiime/beta_diversity_through_plots.cwl
         in: 
             otu-table: filter-otus/table
             mapping: validate-mapping/corrected
             tree:
                 source: cluster/representative_set
                 valueFrom: $(self.tree) 
-        out: [ stderr , beta]
+        out: [ stderr , beta ]
 
     plot:
         label: plot summaries
         run: ../../Tools/qiime/plot_taxa_summary.cwl
         in:
-            taxa-counts-files: summarize_taxa/txt
+            taxa-counts-files: 
                 source: summarize_taxa/txt
                 valueFrom:  |
                     ${ 
