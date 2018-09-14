@@ -79,11 +79,11 @@ outputs:
         outputSource: [ plot/results]    
     errors:
         type: File[]
-        outputSource: [ cluster/stderr , taxonomy/stderr , otu-table/stderr , sort-table/stderr , filter-otus/stderr , summarize_taxa/stderr , plot/stderr ]        
+        outputSource: [ join-reads/stderr , cluster/stderr , taxonomy/stderr , otu-table/stderr , sort-table/stderr , filter-otus/stderr , summarize_taxa/stderr , plot/stderr ]        
 
 steps:
     cluster:
-        label: pick open otus
+        label: pick de novo otus
         run: ../../Tools/qiime/pick_de_novo_otus.cwl
         in:
             fasta: samples-fna

@@ -1,0 +1,1 @@
+This directory contains versioned Dockerfiles. The format for the version number is major.minor.build(date), e.g. 0.9.20180829  

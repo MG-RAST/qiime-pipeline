@@ -12,6 +12,9 @@ hints:
        specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
        version: [ "1.9.1" ]
 
+stderr: join_paired_ends.error
+stdout: join_paired_ends.out
+
 inputs:
   forward:
    type: File
@@ -21,17 +24,34 @@ inputs:
     type: File
     inputBinding:
       prefix: -r
+  index:
+    type: File
+    inputBinding:
+      prefix: -b     
 
 baseCommand: join_paired_ends.py
 
 arguments:
- - valueFrom: $(runtime.tmpdir)
+ - valueFrom: joined
    prefix: -o
 
 outputs:
-  merged:
+  stderr:
+    type: stderr
+  stdout:
+    type: stdout
+  unjoined:
+    type: File[]
+    outputBinding: { glob: "joined/fastqjoin.un*.fastq" }   
+  joined:
     type: File
-    outputBinding: { glob: $(runtime.tmpdir)/fastqjoin.join.fastq }
+    outputBinding: { glob: "joined/fastqjoin.join.fastq" }
+  index: 
+    type: File?
+    outputBinding: { glob: "joined/fastqjoin.join_barcodes.fastq" }  
+  results:
+    type: File[]
+    outputBinding: { glob: "joined/*.fastq" }
   
 
 s:license: "https://www.apache.org/licenses/LICENSE-2.0"

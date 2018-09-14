@@ -1,4 +1,14 @@
-otu-table:
-  class: File
-  path: ../data/filtered.biom
-taxonomic-level: [ 2,3,4,5,6,7 ]  
+taxa-counts-files:
+  - class: File
+    path: /qiime/tmp/cache/7c2994f5a7e5746f51f66505b079ba1f/results/otu-biom-table-sorted_L5.txt
+  - class: File
+    path: /qiime/tmp/cache/7c2994f5a7e5746f51f66505b079ba1f/results/otu-biom-table-sorted_L6.txt
+  - class: File
+    path: /qiime/tmp/cache/7c2994f5a7e5746f51f66505b079ba1f/results/otu-biom-table-sorted_L7.txt
+  - class: File
+    path: /qiime/tmp/cache/7c2994f5a7e5746f51f66505b079ba1f/results/otu-biom-table-sorted_L2.txt
+  - class: File
+    path: /qiime/tmp/cache/7c2994f5a7e5746f51f66505b079ba1f/results/otu-biom-table-sorted_L3.txt
+  - class: File
+    path: /qiime/tmp/cache/7c2994f5a7e5746f51f66505b079ba1f/results/otu-biom-table-sorted_L4.txt
+labels : [ Phylum , Class , Order , Family , Genus , Species ]    

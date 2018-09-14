@@ -5,7 +5,7 @@ class: CommandLineTool
 requirements:
   ResourceRequirement:
     coresMax: 1
-    ramMin: 2048  # just a default, could be lowered
+    ramMin: 4096  # just a default, could be lowered
 
 hints:
 
@@ -45,9 +45,17 @@ outputs:
     outputBinding: 
       glob: otus
   representative_set:
-    type: File
-    outputBinding:
-      glob: otus/rep_set/*_rep_set.fasta
+    type: 
+      type: record
+      fields:
+        tree: 
+          type: File
+          outputBinding:
+            glob: otus/rep_set.tre
+        fasta:
+          type: File
+          outputBinding:
+            glob: otus/rep_set/*_rep_set.fasta
   uclust:   
     type:
       type: record

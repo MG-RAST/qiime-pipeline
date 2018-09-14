@@ -48,6 +48,14 @@ inputs:
    inputBinding:
      prefix: --counts_fname
      itemSeparator: ","
+     valueFrom: |
+          ${ 
+              self.forEach( function(element) {
+                                          var res = element.path.match(/_L(\d+)/);
+                                          element.pos = res[1]
+                                      } );
+              return self.sort(function(a,b){ return a.pos - b.pos } )
+          }
   labels:
     type: 
       - 'null'
@@ -63,14 +71,14 @@ inputs:
 
   output:
     type: string
-    default: ./results
+    default: ./taxa-summary-plots
     inputBinding:
       prefix: --dir_path
       
 arguments:
   - -s   
   - prefix: --chart_type 
-    valueFrom: pie  
+    valueFrom: pie,area,bar  
 
 
 outputs:

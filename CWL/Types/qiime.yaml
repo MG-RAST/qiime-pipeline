@@ -1,0 +1,30 @@
+- type: enum
+  name: taxa-level-type
+  symbols:
+    - Domain
+    - Phylum
+    - Class
+    - Order
+    - Family
+    - Genus
+    - Species
+
+- type: enum
+  name: table-type
+  label: The type of the table to produce
+  symbols:
+    - OTU table
+    - Pathway table
+    - Function table
+    - Ortholog table
+    - Gene table
+    - Metabolite table
+    - Taxon table
+    - Table
+
+- type: enum
+  name: export-formats
+  symbols:
+    - json
+    - tsv
+    

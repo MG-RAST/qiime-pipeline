@@ -16,8 +16,8 @@ RUN apt-get update && apt-get install -y \
 
 ### install CWL runner and QIIME
 RUN pip install --upgrade pip
-RUN pip install cwlref-runner \
-                cwltool \
+RUN pip install cwltool==1.0.20180820141117 \
+                cwlref-runner \    
                 html5lib \
                 matplotlib==2.0.2 \
                 numpy 
