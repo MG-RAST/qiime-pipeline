@@ -1,0 +1,19 @@
+reads:
+  forward:
+    class: File
+    path: ../data/R1_001.fastq 
+  reverse:
+    class: File
+    path: ../data/R2_001.fastq 
+  index:
+    class: File
+    path: ../data/I1_001.fastq     
+
+sample-mapping:
+  class: File  
+  path: ../data/mapping_corrected.txt
+
+# min-observations-per-otu: 2
+summarize-for-taxonomic-levels: 
+    numeric: [ 2,3,4,5,6,7 ]
+    labels: [ Domain , Phylum , Class , Order , Family , Genus , Species ]
