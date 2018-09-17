@@ -1,17 +1,17 @@
 reads:
   forward:
     class: File
-    path: ../data/R1_001.fastq 
+    path: ./R1_001.fastq 
   reverse:
     class: File
-    path: ../data/R2_001.fastq 
+    path: ./R2_001.fastq 
   index:
     class: File
-    path: ../data/I1_001.fastq     
+    path: ./I1_001.fastq     
 
 sample-mapping:
   class: File  
-  path: ../data/mapping_corrected.txt
+  path: ./mapping.txt
 
 # min-observations-per-otu: 2
 summarize-for-taxonomic-levels: 
