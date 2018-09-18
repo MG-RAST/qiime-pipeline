@@ -47,7 +47,7 @@ inputs:
       prefix: --absolute_abundance     
   output:
     type: string
-    default: ./results
+    default: ./summarize_taxa
     inputBinding:
       prefix: --output_dir
       
@@ -55,10 +55,10 @@ inputs:
 
 
 outputs:
-  # results:
-  #   type: Directory
-  #   outputBinding:
-  #     glob: $(inputs.output)
+  results:
+    type: Directory
+    outputBinding:
+      glob: $(inputs.output)
   stderr:
     type: stderr
   stdout: 
