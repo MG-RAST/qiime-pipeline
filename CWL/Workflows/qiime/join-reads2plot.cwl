@@ -175,7 +175,8 @@ steps:
             otu-table: filter-otus/table
             taxonomic-level:
                 source: summarize-for-taxonomic-levels
-                default: [ 2,3,4,5,6,7 ]
+                default: |
+                    { numeric: [ 2,3,4,5,6,7 ] }
                 valueFrom: $(self.numeric) 
         out: [ stderr , biom , txt ]  
 
