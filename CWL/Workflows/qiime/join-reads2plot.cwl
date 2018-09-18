@@ -66,11 +66,20 @@ outputs:
                 - File
                 - Directory
         outputSource: [ 
-            taxonomy/id2taxonomy , 
-            filter-otus/table , 
+            validate-mapping/corrected ,
+            join-reads/joined ,
+            join-reads/index ,
+            samples-to-fasta/fasta ,
+            samples-to-fasta/log ,
             cluster/results , 
+            taxonomy/id2taxonomy ,
+            taxonomy/results ,
+            otu-table/table ,
+            sort-table/table ,
+            filter-otus/table ,
+            summarize-taxa/results ,
             alpha-diversity/alpha ,
-            beta-diversity/beta
+            beta-diversity/results
             ]
     plots:
         type: Directory
@@ -168,7 +177,7 @@ steps:
                 default: 2
         out: [stderr , table ]        
 
-    summarize_taxa:
+    summarize-taxa:
         label: list taxonomic levels
         run: ../../Tools/qiime/summarize_taxa.cwl
         in:
@@ -176,7 +185,7 @@ steps:
             taxonomic-level:
                 source: summarize-for-taxonomic-levels
                 valueFrom: $(self.numeric) 
-        out: [ stderr , biom , txt ]  
+        out: [ stderr , results , biom , txt ]  
 
     alpha-diversity:
         label: alpha diversity
