@@ -175,8 +175,6 @@ steps:
             otu-table: filter-otus/table
             taxonomic-level:
                 source: summarize-for-taxonomic-levels
-                default: |
-                    { numeric: [ 2,3,4,5,6,7 ] }
                 valueFrom: $(self.numeric) 
         out: [ stderr , biom , txt ]  
 
@@ -212,7 +210,7 @@ steps:
                 valueFrom:  |
                     ${ 
                         self.forEach( element => {
-                                                    var res = element.path.match(/_L(\d+)/);
+                                                    var res = element.location.match(/_L(\d+)/);
                                                     element.pos = res[1]
                                     } );
                         return self.sort(function(a,b){ return a.pos - b.pos } )
