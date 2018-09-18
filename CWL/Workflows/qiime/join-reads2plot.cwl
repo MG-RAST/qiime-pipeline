@@ -92,7 +92,8 @@ outputs:
                 plot/stderr , 
                 alpha-diversity/stderr ,
                 beta-diversity/stderr
-                 ]        
+                 ]   
+
 
 steps:
     validate-mapping:
@@ -184,7 +185,7 @@ steps:
         in: 
             otu-table: filter-otus/table
             method:
-                default: [ hao1 , PD_whole_tree , shannon , observed_otus ]
+                default: [ chao1 , PD_whole_tree , shannon , observed_otus ]
             tree: 
                 source: cluster/representative_set
                 valueFrom: $(self.tree)
