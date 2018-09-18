@@ -97,7 +97,7 @@ outputs:
                 otu-table/stderr , 
                 sort-table/stderr , 
                 filter-otus/stderr , 
-                summarize_taxa/stderr , 
+                summarize-taxa/stderr , 
                 plot/stderr , 
                 alpha-diversity/stderr ,
                 beta-diversity/stderr
@@ -208,7 +208,7 @@ steps:
             tree:
                 source: cluster/representative_set
                 valueFrom: $(self.tree) 
-        out: [ stderr , beta ]
+        out: [ stderr , beta , results ]
 
     plot:
         label: plot summaries
