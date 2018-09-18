@@ -215,7 +215,7 @@ steps:
         run: ../../Tools/qiime/plot_taxa_summary.cwl
         in:
             taxa-counts-files: 
-                source: summarize_taxa/txt
+                source: summarize-taxa/txt
                 valueFrom:  |
                     ${ 
                         self.forEach( element => {
