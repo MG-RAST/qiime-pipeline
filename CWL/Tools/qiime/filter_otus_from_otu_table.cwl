@@ -40,7 +40,7 @@ inputs:
       prefix: --min_count
   output:
     type: string
-    default: otu-biom-table-sorted
+    default: otu-table-filtered.biom
     inputBinding:
       prefix: --output_fp
   

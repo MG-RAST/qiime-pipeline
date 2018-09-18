@@ -38,7 +38,7 @@ inputs:
       prefix: --sorted_sample_ids_fp    
   output:
     type: string
-    default: otu-biom-table-sorted
+    default: otu-table-sorted.biom
     inputBinding:
       prefix: --output
   
