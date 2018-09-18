@@ -46,6 +46,9 @@ outputs:
     type: stderr
   stdout:
     type: stdout
+  results:
+    type: Directory
+    outputBinding:  { glob: "beta_diversity" }   
   beta:
     type: Directory
     outputBinding: { glob: "beta_diversity" }   
