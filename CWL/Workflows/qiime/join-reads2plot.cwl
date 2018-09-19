@@ -89,9 +89,8 @@ outputs:
 
     split-libraries:
         doc: output of split_libraries_fastq.py, demultiplex and quality filter (at Phred >= Q20)
-        type: File[]
-        outputSource: [ samples-to-fasta/fasta , 
-                        samples-to-fasta/log ]         
+        type: Directory
+        outputSource: [ samples-to-fasta/demultiplexed ]         
           
     taxa-summary-plots:
         type: Directory
@@ -153,7 +152,7 @@ steps:
             reads: join-reads/joined
             index: join-reads/index
             mapping: validate-mapping/corrected
-        out: [ fasta , log ]        
+        out: [ demultiplexed , fasta , log ]        
     cluster:
         label: pick de novo otus
         run: ../../Tools/qiime/pick_de_novo_otus.cwl
