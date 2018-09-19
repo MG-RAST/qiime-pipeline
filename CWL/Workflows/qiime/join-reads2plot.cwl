@@ -66,11 +66,11 @@ outputs:
                 - File
                 - Directory
         outputSource: [ 
-            validate-mapping/corrected ,
+            # validate-mapping/corrected ,
             join-reads/joined ,
             join-reads/index ,
-            samples-to-fasta/fasta ,
-            samples-to-fasta/log ,
+            # samples-to-fasta/fasta ,
+            # samples-to-fasta/log ,
             cluster/results , 
             taxonomy/id2taxonomy ,
             taxonomy/results ,
@@ -78,18 +78,36 @@ outputs:
             sort-table/table ,
             filter-otus/table ,
             summarize-taxa/results ,
-            alpha-diversity/alpha ,
-            beta-diversity/results
+            # alpha-diversity/alpha ,
+            # beta-diversity/results
             ]
-    plots:
-        type: Directory
-        outputSource: [ plot/results]
+
+    validated-mapping-file:
+        doc: mapping file validated with validate_mapping_file.py
+        type: File
+        outputSource: validate-mapping/corrected
+
     split-libraries:
+        doc: output of split_libraries_fastq.py, demultiplex and quality filter (at Phred >= Q20)
         type: File[]
         outputSource: [ samples-to-fasta/fasta , 
                         samples-to-fasta/log ]         
-    errors:
+          
+    taxa-summary-plots:
+        type: Directory
+        outputSource: [ plot/results]
+
+    aplha-diversity-results:
+        type: File
+        outputSource: alpha-diversity/alpha 
+       
+    beta-diversity-results:
+        type: Directory
+        outputSource: beta-diversity/results    
+    
+    error-logs:  
         type: File[]
+        doc: Error logs for each step, collected by default and can be empty.
         outputSource: [ 
                 join-reads/stderr , 
                 cluster/stderr , 
@@ -210,7 +228,8 @@ steps:
                 valueFrom: $(self.tree) 
         out: [ stderr , beta , results ]
 
-    plot:
+    # plot-taxa-summary:
+    plot:    
         label: plot summaries
         run: ../../Tools/qiime/plot_taxa_summary.cwl
         in:
