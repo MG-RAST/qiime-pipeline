@@ -59,28 +59,6 @@ inputs:
 
 
 outputs: 
-    results:
-        type: 
-            type: array
-            items:
-                - File
-                - Directory
-        outputSource: [ 
-            # validate-mapping/corrected ,
-            join-reads/joined ,
-            join-reads/index ,
-            # samples-to-fasta/fasta ,
-            # samples-to-fasta/log ,
-            cluster/results , 
-            taxonomy/id2taxonomy ,
-            taxonomy/results ,
-            otu-table/table ,
-            sort-table/table ,
-            filter-otus/table ,
-            summarize-taxa/results ,
-            # alpha-diversity/alpha ,
-            # beta-diversity/results
-            ]
 
     validated-mapping-file:
         doc: mapping file validated with validate_mapping_file.py
@@ -94,7 +72,7 @@ outputs:
           
     taxa-summary-plots:
         type: Directory
-        outputSource: [ plot/results]
+        outputSource: [ plot-taxa-summary/results]
 
     aplha-diversity-results:
         type: File
@@ -118,7 +96,29 @@ outputs:
                 plot/stderr , 
                 alpha-diversity/stderr ,
                 beta-diversity/stderr
-                 ]   
+                 ]  
+    results:
+        type: 
+            type: array
+            items:
+                - File
+                - Directory
+        outputSource: [ 
+            # validate-mapping/corrected ,
+            join-reads/joined ,
+            join-reads/index ,
+            # samples-to-fasta/fasta ,
+            # samples-to-fasta/log ,
+            cluster/results , 
+            taxonomy/id2taxonomy ,
+            taxonomy/results ,
+            otu-table/table ,
+            sort-table/table ,
+            filter-otus/table ,
+            summarize-taxa/results ,
+            # alpha-diversity/alpha ,
+            # beta-diversity/results
+            ]              
 
 
 steps:
@@ -227,8 +227,7 @@ steps:
                 valueFrom: $(self.tree) 
         out: [ stderr , beta , results ]
 
-    # plot-taxa-summary:
-    plot:    
+    plot-taxa-summary:    
         label: plot summaries
         run: ../../Tools/qiime/plot_taxa_summary.cwl
         in:
