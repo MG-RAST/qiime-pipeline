@@ -23,6 +23,8 @@ RUN pip install cwltool==1.0.20180820141117 \
                 numpy 
 RUN pip install qiime 
 
+# matplotlib==1.5.3
+
 # change global matplotlib config 
 # CWL changes $HOME / change to non interactive
 RUN sed -i -s "s/TkAgg/Agg/" /usr/local/lib/python2.7/dist-packages/matplotlib/mpl-data/matplotlibrc
