@@ -93,7 +93,7 @@ outputs:
                 sort-table/stderr , 
                 filter-otus/stderr , 
                 summarize-taxa/stderr , 
-                plot/stderr , 
+                plot-taxa-summary/stderr , 
                 alpha-diversity/stderr ,
                 beta-diversity/stderr
                  ]  
