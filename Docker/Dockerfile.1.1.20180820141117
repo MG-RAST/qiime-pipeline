@@ -27,6 +27,6 @@ RUN pip install qiime
 
 # change global matplotlib config 
 # CWL changes $HOME / change to non interactive
-RUN sed -i -s "s/TkAgg/Agg/" /usr/local/lib/python2.7/dist-packages/matplotlib/mpl-data/matplotlibrc
+RUN sed -i -s "s/TkAgg/Agg/gI" /usr/local/lib/python2.7/dist-packages/matplotlib/mpl-data/matplotlibrc
 
 
