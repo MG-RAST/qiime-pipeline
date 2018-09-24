@@ -8,11 +8,13 @@ requirements:
     ramMin: 1024  # just a default, could be lowered
 
 hints:
- SoftwareRequirement:
-   packages:
-     qiime:
-       specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
-       version: [ "1.9.1" ]
+  DockerRequirement: 
+    dockerPull: mgrast/qiime:1.0.20180919
+  SoftwareRequirement:
+    packages:
+      qiime:
+        specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
+        version: [ "1.9.1" ]
 
 stderr: assign_taxonomy.error
 stdout: assign_taxonomy.out

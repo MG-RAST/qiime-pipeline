@@ -8,13 +8,13 @@ requirements:
   InlineJavascriptRequirement: {}
      
 hints:
- SoftwareRequirement:
-   packages:
-     qiime:
-       specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
-       version: [ "1.9.1" ]
-
-
+  DockerRequirement: 
+    dockerPull: mgrast/qiime:1.0.20180919
+  SoftwareRequirement:
+    packages:
+      qiime:
+        specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
+        version: [ "1.9.1" ]
 
 baseCommand: [ biom , convert]
 # -i /make_otu_table_output/otu_table_gg.biom

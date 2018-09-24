@@ -8,13 +8,13 @@ requirements:
     ramMin: 4096  # just a default, could be lowered
 
 hints:
-
+  DockerRequirement: 
+    dockerPull: mgrast/qiime:1.0.20180919
   SoftwareRequirement:
     packages:
       qiime:
         specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
         version: [ "1.9.1" ]
-
 
 stderr: pick_de_novo_otus.error
 stdout: pick_de_novo_otus.out

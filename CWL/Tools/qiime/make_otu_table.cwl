@@ -5,13 +5,15 @@ requirements:
   ResourceRequirement:
     coresMax: 1
     ramMin: 1024  # just a default, could be lowered
-hints:
- SoftwareRequirement:
-   packages:
-     qiime:
-       specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
-       version: [ "1.9.1" ]
 
+hints:
+  DockerRequirement: 
+    dockerPull: mgrast/qiime:1.0.20180919
+  SoftwareRequirement:
+    packages:
+      qiime:
+        specs: [ "https://identifiers.org/rrid/RRID:SCR_008249" ]
+        version: [ "1.9.1" ]
 
 stderr: make_otu_table.error
 stdout: make_otu_table.out
