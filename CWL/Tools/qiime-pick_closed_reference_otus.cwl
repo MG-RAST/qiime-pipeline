@@ -1,1 +1,0 @@
-../ebi-metagenomics-cwl/tools/qiime-pick_closed_reference_otus.cwl
