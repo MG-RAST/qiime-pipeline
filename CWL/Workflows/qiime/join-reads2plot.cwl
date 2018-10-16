@@ -44,11 +44,10 @@ inputs:
         type: int?
     summarize-for-taxonomic-levels:
         type: 
-            -   'null'
-            -   type: record
-                fields:
-                    numeric: int[]
-                    labels: level-type[]
+            type: record
+            fields:
+                numeric: int[]
+                labels: level-type[]
     reads:
         type:
             type: record
@@ -192,13 +191,23 @@ steps:
             min_observation_count:
                 source: min-observations-per-otu
                 default: 2
-        out: [stderr , table ]        
+        out: [stderr , table ]
+
+    filter-samples:
+        label: remove samples with low coverage
+        run: ../../Tools/qiime/filter_samples_from_otu_table.cwl
+        in:
+            otu-biom-table: filter-otus/table
+            min_observation_count:
+                source: min-observations-per-sample
+                default: 100
+        out: [stderr , table ]                
 
     summarize-taxa:
         label: list taxonomic levels
         run: ../../Tools/qiime/summarize_taxa.cwl
         in:
-            otu-table: filter-otus/table
+            otu-table: filter-samples/table
             taxonomic-level:
                 source: summarize-for-taxonomic-levels
                 valueFrom: $(self.numeric) 
@@ -208,7 +217,7 @@ steps:
         label: alpha diversity
         run: ../../Tools/qiime/alpha_diversity.cwl
         in: 
-            otu-table: filter-otus/table
+            otu-table: filter-samples/table
             method:
                 default: [ chao1 , PD_whole_tree , shannon , observed_otus ]
             tree: 
@@ -220,7 +229,7 @@ steps:
         label: beta diversity
         run: ../../Tools/qiime/beta_diversity_through_plots.cwl
         in: 
-            otu-table: filter-otus/table
+            otu-table: filter-samples/table
             mapping: validate-mapping/corrected
             tree:
                 source: cluster/representative_set
