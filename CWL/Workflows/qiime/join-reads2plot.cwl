@@ -42,6 +42,8 @@ inputs:
         type: File
     min-observations-per-otu:
         type: int?
+    min-observations-per-sample:
+        type: int?    
     summarize-for-taxonomic-levels:
         type: 
             type: record
