@@ -20,17 +20,19 @@ stdout: split_libraries_fastq.out
 
 inputs:
   reads:
-   type: File
+   type: File[]
    inputBinding:
      prefix: -i
+     itemSeparator: "," 
   mapping:
     type: File
     inputBinding:
       prefix: -m
   index:
-    type: File
+    type: File[]
     inputBinding:
-      prefix: -b     
+      prefix: -b
+      itemSeparator: ","      
 
 baseCommand: split_libraries_fastq.py
 

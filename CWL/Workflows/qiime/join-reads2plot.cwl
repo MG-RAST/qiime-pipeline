@@ -150,8 +150,12 @@ steps:
         label: map sample ids and create fasta
         run: ../../Tools/qiime/split_libraries_fastq.cwl
         in:
-            reads: join-reads/joined
+            reads: 
+                source: join-reads/joined
+                valueFrom: ${ return [ self ]; }
             index: join-reads/index
+                source: join-reads/joined
+                valueFrom: ${ return [ self ]; }
             mapping: validate-mapping/corrected
         out: [ demultiplexed , fasta , log ]        
     cluster:
