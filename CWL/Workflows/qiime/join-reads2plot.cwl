@@ -154,7 +154,7 @@ steps:
                 source: join-reads/joined
                 valueFrom: ${ return [ self ]; }
             index: 
-                source: join-reads/joined
+                source: join-reads/index
                 valueFrom: ${ return [ self ]; }
             mapping: validate-mapping/corrected
         out: [ demultiplexed , fasta , log ]        
