@@ -153,8 +153,8 @@ steps:
             reads: 
                 source: join-reads/joined
                 valueFrom: ${ return [ self ]; }
-            index: join-reads/index
-                source: join-reads/joined
+            index: 
+                source: join-reads/index
                 valueFrom: ${ return [ self ]; }
             mapping: validate-mapping/corrected
         out: [ demultiplexed , fasta , log ]        
