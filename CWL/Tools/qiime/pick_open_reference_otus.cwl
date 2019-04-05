@@ -33,12 +33,18 @@ inputs:
     doc: otu picking method , usearch61 or uclust
     default: uclust
     inputBinding:
-      prefix: --otu_picking_method   
+      prefix: --otu_picking_method  
+  reference_database:
+    type: File?
+    doc: reference sequence file, default is  qiime_default_reference/gg_13_8_otus/rep_set/97_otus.fasta
+    inputBinding:
+      prefix: --reference_fp  
 
 arguments:
  - valueFrom: otus
    prefix: --output_dir
- - --force  
+ - --force
+ - --parallel  
 
 outputs:
   stdout: 
