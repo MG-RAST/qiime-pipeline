@@ -9,7 +9,7 @@ requirements:
 
 hints:
   DockerRequirement: 
-    dockerPull: mgrast/qiime:1.0.20180919
+    dockerPull: mgrast/qiime:1.0
   SoftwareRequirement:
     packages:
       qiime:
