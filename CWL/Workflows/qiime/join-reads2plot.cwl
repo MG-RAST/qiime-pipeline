@@ -40,6 +40,9 @@ hints:
 inputs:
     sample-mapping:
         type: File
+    barcode-is-reverse-complement:
+        type: boolean
+        default: False
     min-observations-per-otu:
         type: int?
     min-observations-per-sample:
@@ -156,6 +159,8 @@ steps:
             index: 
                 source: join-reads/index
                 valueFrom: ${ return [ self ]; }
+            reverse-complement-barcode:
+                source: barcode-is-reverse-complement
             mapping: validate-mapping/corrected
         out: [ demultiplexed , fasta , log ]        
     cluster:
