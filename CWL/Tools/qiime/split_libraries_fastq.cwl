@@ -32,7 +32,12 @@ inputs:
     type: File[]
     inputBinding:
       prefix: -b
-      itemSeparator: ","      
+      itemSeparator: ","   
+  reverse-complement-barcode:
+    type: boolean?
+    doc: Reverse complement barcode reads before lookup , default = False
+    inputBinding:
+      prefix: --rev_comp_barcode  
 
 baseCommand: split_libraries_fastq.py
 
