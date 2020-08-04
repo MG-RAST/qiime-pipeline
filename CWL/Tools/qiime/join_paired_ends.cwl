@@ -56,5 +56,3 @@ outputs:
     outputBinding: { glob: "joined/*.fastq" }
   
 
-s:license: "https://www.apache.org/licenses/LICENSE-2.0"
-s:copyrightHolder: "n/a"

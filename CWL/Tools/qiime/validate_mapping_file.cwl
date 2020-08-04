@@ -44,5 +44,3 @@ outputs:
         glob: mapping/*_corrected.txt  
 
 
-s:license: "https://www.apache.org/licenses/LICENSE-2.0"
-s:copyrightHolder: "n/a"
