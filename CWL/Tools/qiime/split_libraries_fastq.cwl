@@ -37,7 +37,17 @@ inputs:
     type: boolean?
     doc: Reverse complement barcode reads before lookup , default = False
     inputBinding:
-      prefix: --rev_comp_barcode  
+      prefix: --rev_comp_barcode 
+  store_qual_scores:
+    type: boolean?
+    default: false
+    inputBinding:
+      prefix: --store_qual_scores
+  store_demultiplexed_fastq:
+    type: boolean?
+    default: false
+    inputBinding:
+      prefix: --store_demultiplexed_fastq 
 
 baseCommand: split_libraries_fastq.py
 
@@ -45,7 +55,9 @@ arguments:
     - valueFrom: demultiplexed
       prefix: -o
     - valueFrom: "12"
-      prefix: --barcode_type  
+      prefix: --barcode_type
+    - valueFrom: "0"
+      prefix: -n   
 
 
 

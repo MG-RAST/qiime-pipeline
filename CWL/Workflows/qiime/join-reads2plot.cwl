@@ -41,7 +41,7 @@ inputs:
     sample-mapping:
         type: File
     barcode-is-reverse-complement:
-        type: boolean
+        type: boolean?
         default: False
     min-observations-per-otu:
         type: int?
