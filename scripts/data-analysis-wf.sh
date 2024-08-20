@@ -11,7 +11,8 @@ RAW_DATA_DIR=$BASE_DIR/input/raw-data
 BARCODES_FILE=$INPUT_DIR/mapping.txt
 #BARCODES_FILE=$INPUT_DIR/metadata.tsv
 
-
+SAMPLING_DEPTH=1100
+MAX_DEPTH_ALPHA_DIVERSITY=4000
 
 
 echo "Importing data from $RAW_DATA_DIR"
@@ -71,14 +72,21 @@ ln -s $RELATIVE_OUTPUT_DIR/demux-full.qzv $INPUT_DIR/demux-full.qzv
 
 echo "Extracting demux data"
 
+if [ ! -d $OUTPUT_DIR/demux-full ] 
+then
 
 qiime tools extract \
 --input-path $INPUT_DIR/demux-full.qzv \
 --output-path $OUTPUT_DIR/demux-full
 
-
+else
+    echo "Skipping extract demux data"
+fi
 
 echo "Denoising data"
+
+if [ ! -f $OUTPUT_DIR/table-dada2.qza ] && [ ! -f $OUTPUT_DIR/rep-seqs-dada2.qza ] && [ ! -f $OUTPUT_DIR/denoising-stats-dada2.qza ]
+then
 
 qiime dada2 denoise-paired \
 --i-demultiplexed-seqs $INPUT_DIR/demux-full.qza \
@@ -89,8 +97,11 @@ qiime dada2 denoise-paired \
 --p-trunc-len-r 0 
 # --p-trim-left-f XXX \
 # --p-trim-left-r XXX \
+    
+else
+    echo "Skipping denoising"
+fi
 
-exit 0
 
 
 ln -s $RELATIVE_OUTPUT_DIR/table-dada2.qza $INPUT_DIR/table-dada2.qza
@@ -99,77 +110,126 @@ ln -s $RELATIVE_OUTPUT_DIR/denoising-stats-dada2.qza $INPUT_DIR/denoising-stats-
 
 echo "Summarizing feature table"
 
+if [ ! -f $OUTPUT_DIR/table-dada2.qzv ]
+then
+
 qiime feature-table summarize \
 --i-table $INPUT_DIR/table-dada2.qza \
 --m-sample-metadata-file $BARCODES_FILE \
 --o-visualization $INPUT_DIR/table-dada2.qzv 
 
+else
+    echo "Skipping feature table summary"
+fi
+
 echo "Summarizing feature sequences"
+
+if [ ! -f $OUTPUT_DIR/rep-seqs-dada2.qzv ]
+then
 
 qiime feature-table tabulate-seqs \
 --i-data $INPUT_DIR/rep-seqs-dada2.qza \
 --o-visualization $OUTPUT_DIR/rep-seqs-dada2.qzv
 
+else
+    echo "Skipping feature sequences summary"
+fi
 
+echo "Creating symbolic links to input directory for feature table and sequences visualizations"
+ln -s $RELATIVE_OUTPUT_DIR/table-dada2.qzv $INPUT_DIR/table-dada2.qzv
+
+echo "Metadata tabulate"
+
+if [ ! -f $OUTPUT_DIR/denoising-stats-dada2.qzv ]
+then
 qiime metadata tabulate \ 
 --m-input-file $INPUT_DIR/denoising-stats-dada2.qza \
 --o-visualization $OUTPUT_DIR/denoising-stats-dada2.qzv
+else
+    echo "Skipping metadata tabulate"
+fi
 
-exit 0
-
+if [ ! -f $OUTPUT_DIR/aligned-rep-seqs.qza ] \
+&& [ ! -f $OUTPUT_DIR/masked-aligned-rep-seqs.qza ] \
+&& [ ! -f $OUTPUT_DIR/unrooted-tree.qza ] \
+&& [ ! -f $OUTPUT_DIR/rooted-tree.qza ] 
+then
 qiime phylogeny align-to-tree-mafft-fasttree \
---i-sequences rep-seqs-dada2.qza \
---o-alignment aligned-rep-seqs.qza \
---o-masked-alignment masked-aligned-rep-seqs.qza \
---o-tree unrooted-tree.qza \
---o-rooted-tree rooted-tree.qza
+--i-sequences $INPUT_DIR/rep-seqs-dada2.qza \
+--o-alignment $OUTPUT_DIR/aligned-rep-seqs.qza \
+--o-masked-alignment $OUTPUT_DIR/masked-aligned-rep-seqs.qza \
+--o-tree $OUTPUT_DIR/unrooted-tree.qza \
+--o-rooted-tree $OUTPUT_DIR/rooted-tree.qza
+
+else
+    echo "Skipping phylogeny"
+fi
+
+ln -s $RELATIVE_OUTPUT_DIR/aligned-rep-seqs.qza $INPUT_DIR/aligned-rep-seqs.qza
+ln -s $RELATIVE_OUTPUT_DIR/masked-aligned-rep-seqs.qza $INPUT_DIR/masked-aligned-rep-seqs.qza
+ln -s $RELATIVE_OUTPUT_DIR/unrooted-tree.qza $INPUT_DIR/unrooted-tree.qza
+ln -s $RELATIVE_OUTPUT_DIR/rooted-tree.qza $INPUT_DIR/rooted-tree.qza
+
+
+echo "Core metrics phylogenetic"
+if [ ! -d $OUTPUT_DIR/core-metrics-results ]
+then
 
 qiime diversity core-metrics-phylogenetic \ 
---i-phylogeny rooted-tree.qza\
---i-table table-dada2.qza \
---p-sampling-depth XXXX \ 		
---m-metadata-file sample-metadata.tsv \
---output-dir core-metrics-results
+--i-phylogeny $INPUT_DIR/rooted-tree.qza\
+--i-table $INPUT_DIR/table-dada2.qza \
+--p-sampling-depth $SAMPLING_DEPTH \ 		
+--m-metadata-file $INPUT_DIR/sample-metadata.tsv \
+--output-dir $OUTPUT_DIR/core-metrics-results
+
+else
+    echo "Skipping core metrics phylogenetic"
+fi
+
+echo "Creating symbolic link to input directory for core metrics results"
+ln -s $RELATIVE_OUTPUT_DIR/core-metrics-results $INPUT_DIR/core-metrics-results
+
+echo "Alpha rarefaction"
 
 qiime diversity alpha-rarefaction \
---i-table table-dada2.qza \
---i-phylogeny rooted-tree.qza \
---p-max-depth XXXX \
---m-metadata-file sample-metadata.tsv \
---o-visualization alpha-rarefaction.qzv
+--i-table $INPUT_DIR/table-dada2.qza \
+--i-phylogeny $INPUT_DIR/rooted-tree.qza \
+--p-max-depth $MAX_DEPTH_ALPHA_DIVERSITY \
+--m-metadata-file $BARCODES_FILE \
+--o-visualization $OUTPUT_DIR/alpha-rarefaction.qzv
 
 
 qiime diversity alpha-group-significance \
---i-alpha-diversity core-metrics-results/faith_pd_vector.qza \
---m-metadata-file sample-metadata.tsv \
---o-visualization core-metrics-results/faith-pd-group-significance.qzv
+--i-alpha-diversity $INPUT_DIR/core-metrics-results/faith_pd_vector.qza \
+--m-metadata-file $BARCODES_FILE \
+--o-visualization $OUTPUT_DIR/core-metrics-results/faith-pd-group-significance.qzv
 
 qiime diversity alpha-group-significance \
---i-alpha-diversity core-metrics-results/evenness_vector.qza \
---m-metadata-file sample-metadata.tsv \
---o-visualization core-metrics-results/evenness-group-significance.qzv
+--i-alpha-diversity $INPUT_DIR/core-metrics-results/evenness_vector.qza \
+--m-metadata-file $BARCODES_FILE \
+--o-visualization $OUTPUT_DIR/core-metrics-results/evenness-group-significance.qzv
 
 qiime diversity beta-group-significance \
---i-distance-matrix core-metrics-results/unweighted_unifrac_distance_matrix.qza \
---m-metadata-file sample-metadata.tsv \
+--i-distance-matrix $INPUT_DIR/core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+--m-metadata-file $BARCODES_FILE \
 --m-metadata-column transect-name \
---o-visualization core-metrics-results/unweighted-unifrac-transect-name-significance.qzv \ 
+--o-visualization $OUTPUT_DIR/core-metrics-results/unweighted-unifrac-transect-name-significance.qzv \ 
 --p-pairwise
 
 
 qiime feature-classifier classify-sklearn \
---i-classifier gg-18-8-99-515-806-nb-classifier.qza \
---i-reads rep-seqs-dada2.qza \
---o-classification taxonomy.qza
+--i-classifier $INPUT_DIR/gg-18-8-99-515-806-nb-classifier.qza \
+--i-reads $INPUT_DIR/rep-seqs-dada2.qza \
+--o-classification $OUTPUT_DIR/taxonomy.qza
 
 qiime metadata tabulate \
---m-input-file taxonomy.qza \
---o-visualization taxonomy.qzv
+--m-input-file $INPUT_DIR/taxonomy.qza \
+--o-visualization $OUTPUT_DIR/taxonomy.qzv
 
 
 qiime taxa barplot \
---i-table table-dada2.qza \
---i-taxonomy taxonomy.qza \
---m-metadata-file sample-metadata.tsv \
---o-visualization taxa-bar-plots.qzv
+--i-table $INPUT_DIR/table-dada2.qza \
+--i-taxonomy $INPUT_DIR/taxonomy.qza \
+--m-metadata-file $BARCODES_FILE \
+--o-visualization $OUTPUT_DIR/taxa-bar-plots.qzv
 
