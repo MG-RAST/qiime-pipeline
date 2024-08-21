@@ -181,10 +181,10 @@ then
 
 # use $SAMPLE_DEPTH for --p-sampling-depth
 qiime diversity core-metrics-phylogenetic \
---i-phylogeny $INPUT_DIR/rooted-tree.qza\
+--i-phylogeny $INPUT_DIR/rooted-tree.qza \
 --i-table $INPUT_DIR/table-dada2.qza \
 --p-n-jobs-or-threads auto \
---p-sampling-depth None \
+--p-sampling-depth 1 \
 --m-metadata-file $BARCODES_FILE \
 --output-dir $OUTPUT_DIR/core-metrics-results
 
