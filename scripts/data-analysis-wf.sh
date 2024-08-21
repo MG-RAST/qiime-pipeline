@@ -116,7 +116,7 @@ then
 qiime feature-table summarize \
 --i-table $INPUT_DIR/table-dada2.qza \
 --m-sample-metadata-file $BARCODES_FILE \
---o-visualization $INPUT_DIR/table-dada2.qzv 
+--o-visualization $OUTPUT_DIR/table-dada2.qzv 
 
 else
     echo "Skipping feature table summary"
