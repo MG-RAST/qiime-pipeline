@@ -142,7 +142,7 @@ echo "Metadata tabulate"
 
 if [ ! -f $OUTPUT_DIR/denoising-stats-dada2.qzv ]
 then
-qiime metadata tabulate \ 
+qiime metadata tabulate \
 --m-input-file $INPUT_DIR/denoising-stats-dada2.qza \
 --o-visualization $OUTPUT_DIR/denoising-stats-dada2.qzv
 else
