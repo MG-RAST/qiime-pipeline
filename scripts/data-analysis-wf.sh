@@ -178,11 +178,13 @@ echo "Core metrics phylogenetic"
 if [ ! -d $OUTPUT_DIR/core-metrics-results ]
 then
 
+
+# use $SAMPLE_DEPTH for --p-sampling-depth
 qiime diversity core-metrics-phylogenetic \
 --i-phylogeny $INPUT_DIR/rooted-tree.qza\
 --i-table $INPUT_DIR/table-dada2.qza \
 --p-n-jobs-or-threads auto \
---p-sampling-depth None # $SAMPLING_DEPTH \
+--p-sampling-depth None \
 --m-metadata-file $BARCODES_FILE \
 --output-dir $OUTPUT_DIR/core-metrics-results
 
