@@ -122,6 +122,9 @@ else
     echo "Skipping feature table summary"
 fi
 
+echo "Creating symbolic link to input directory for feature table visualization"
+ln -s $RELATIVE_OUTPUT_DIR/table-dada2.qzv $INPUT_DIR/table-dada2.qzv
+
 echo "Summarizing feature sequences"
 
 if [ ! -f $OUTPUT_DIR/rep-seqs-dada2.qzv ]
