@@ -9,6 +9,7 @@ RELATIVE_OUTPUT_DIR=../output # Relative path to input directory from output dir
 RAW_DATA_DIR=$BASE_DIR/input/raw-data
 
 BARCODES_FILE=$INPUT_DIR/mapping.txt
+BARCODES_FILE=$INPUT_DIR/mapping.tsv
 #BARCODES_FILE=$INPUT_DIR/metadata.tsv
 
 SAMPLING_DEPTH=1100
@@ -201,7 +202,7 @@ echo "Alpha rarefaction"
 qiime diversity alpha-rarefaction \
 --i-table $INPUT_DIR/table-dada2.qza \
 --i-phylogeny $INPUT_DIR/rooted-tree.qza \
---p-max-depth 10 \
+--p-max-depth 20 \
 --m-metadata-file $BARCODES_FILE \
 --o-visualization $OUTPUT_DIR/alpha-rarefaction.qzv
 
