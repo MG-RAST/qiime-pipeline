@@ -197,10 +197,11 @@ ln -s $RELATIVE_OUTPUT_DIR/core-metrics-results $INPUT_DIR/core-metrics-results
 
 echo "Alpha rarefaction"
 
+# use $MAX_DEPTH_ALPHA_DIVERSITY for --p-max-depth
 qiime diversity alpha-rarefaction \
 --i-table $INPUT_DIR/table-dada2.qza \
 --i-phylogeny $INPUT_DIR/rooted-tree.qza \
---p-max-depth $MAX_DEPTH_ALPHA_DIVERSITY \
+--p-max-depth 1 \
 --m-metadata-file $BARCODES_FILE \
 --o-visualization $OUTPUT_DIR/alpha-rarefaction.qzv
 
@@ -215,12 +216,20 @@ qiime diversity alpha-group-significance \
 --m-metadata-file $BARCODES_FILE \
 --o-visualization $OUTPUT_DIR/core-metrics-results/evenness-group-significance.qzv
 
+
+if [ ! -f $OUTPUT_DIR/core-metrics-results/observed-otus-group-significance.qzv ] && [ $METADTA_COLUMN=='']
+then
 qiime diversity beta-group-significance \
 --i-distance-matrix $INPUT_DIR/core-metrics-results/unweighted_unifrac_distance_matrix.qza \
 --m-metadata-file $BARCODES_FILE \
---m-metadata-column transect-name \
---o-visualization $OUTPUT_DIR/core-metrics-results/unweighted-unifrac-transect-name-significance.qzv \ 
+--m-metadata-column $METADTA_COLUMN \
+--o-visualization $OUTPUT_DIR/core-metrics-results/unweighted-unifrac-transect-name-significance.qzv \
 --p-pairwise
+
+else
+    echo "Skipping beta group significance"
+    echo "Metadata column not provided or file exists"
+fi
 
 
 qiime feature-classifier classify-sklearn \
