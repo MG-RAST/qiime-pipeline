@@ -181,7 +181,8 @@ then
 qiime diversity core-metrics-phylogenetic \
 --i-phylogeny $INPUT_DIR/rooted-tree.qza\
 --i-table $INPUT_DIR/table-dada2.qza \
---p-sampling-depth $SAMPLING_DEPTH \
+--p-n-jobs-or-threads auto \
+--p-sampling-depth None # $SAMPLING_DEPTH \
 --m-metadata-file $BARCODES_FILE \
 --output-dir $OUTPUT_DIR/core-metrics-results
 
