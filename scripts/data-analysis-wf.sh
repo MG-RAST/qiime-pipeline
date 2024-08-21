@@ -178,11 +178,11 @@ echo "Core metrics phylogenetic"
 if [ ! -d $OUTPUT_DIR/core-metrics-results ]
 then
 
-qiime diversity core-metrics-phylogenetic \ 
+qiime diversity core-metrics-phylogenetic \
 --i-phylogeny $INPUT_DIR/rooted-tree.qza\
 --i-table $INPUT_DIR/table-dada2.qza \
---p-sampling-depth $SAMPLING_DEPTH \ 		
---m-metadata-file $INPUT_DIR/sample-metadata.tsv \
+--p-sampling-depth $SAMPLING_DEPTH \
+--m-metadata-file $BARCODES_FILE \
 --output-dir $OUTPUT_DIR/core-metrics-results
 
 else
