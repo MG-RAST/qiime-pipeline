@@ -201,7 +201,7 @@ echo "Alpha rarefaction"
 qiime diversity alpha-rarefaction \
 --i-table $INPUT_DIR/table-dada2.qza \
 --i-phylogeny $INPUT_DIR/rooted-tree.qza \
---p-max-depth 1 \
+--p-max-depth 10 \
 --m-metadata-file $BARCODES_FILE \
 --o-visualization $OUTPUT_DIR/alpha-rarefaction.qzv
 
