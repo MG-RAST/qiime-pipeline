@@ -1,6 +1,6 @@
 # This script is a workflow for analyzing 16S rRNA gene sequences using QIIME2.
 BASE_DIR=$1
-SKIP=1
+SKIP=0
 INPUT_DIR=$BASE_DIR/input
 OUTPUT_DIR=$BASE_DIR/output
 RELATIVE_OUTPUT_DIR=../output # Relative path to input directory from output directory
@@ -12,9 +12,9 @@ SAMPLING_DEPTH=1100
 MAX_DEPTH_ALPHA_DIVERSITY=4000
 
 echo "Importing data from $RAW_DATA_DIR"
-if [ ! -f $OUTPUT_DIR/emp-paired-end-sequences.qza ] && [ $SKIP -le 2 ] 
+if [ ! -f $OUTPUT_DIR/emp-paired-end-sequences.qza ]
 then
-    time qiime tools import \
+    qiime tools import \
     --type EMPPairedEndSequences \
     --input-path $RAW_DATA_DIR \
     --output-path $OUTPUT_DIR/emp-paired-end-sequences.qza
@@ -29,7 +29,7 @@ echo "Demultiplexing data"
 echo "Using barcodes file: $BARCODES_FILE"
 if [  ! -f  $OUTPUT_DIR/demux-full.qza ] && [ ! -f $OUTPUT_DIR/demux-details.qza ]
 then
-    time qiime demux emp-paired \
+    qiime demux emp-paired \
     --m-barcodes-file $BARCODES_FILE \
     --m-barcodes-column barcode-sequence \
     --p-rev-comp-mapping-barcodes \
@@ -48,7 +48,7 @@ ln -s $RELATIVE_OUTPUT_DIR/demux-details.qza $INPUT_DIR/demux-details.qza
 echo "Summarizing demux data"
 if [ ! -f $OUTPUT_DIR/demux-full.qzv ] 
 then 
-    time qiime demux summarize \
+    qiime demux summarize \
     --i-data $INPUT_DIR/demux-full.qza \
     --o-visualization $OUTPUT_DIR/demux-full.qzv
 else
