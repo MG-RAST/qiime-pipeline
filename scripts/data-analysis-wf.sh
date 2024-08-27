@@ -202,7 +202,7 @@ echo "Alpha rarefaction"
 qiime diversity alpha-rarefaction \
 --i-table $INPUT_DIR/table-dada2.qza \
 --i-phylogeny $INPUT_DIR/rooted-tree.qza \
---p-max-depth 20 \
+--p-max-depth 5 \
 --m-metadata-file $BARCODES_FILE \
 --o-visualization $OUTPUT_DIR/alpha-rarefaction.qzv
 
@@ -218,7 +218,7 @@ qiime diversity alpha-group-significance \
 --o-visualization $OUTPUT_DIR/core-metrics-results/evenness-group-significance.qzv
 
 
-if [ ! -f $OUTPUT_DIR/core-metrics-results/observed-otus-group-significance.qzv ] && [ $METADTA_COLUMN=='']
+if [ ! -f $OUTPUT_DIR/core-metrics-results/observed-otus-group-significance.qzv ] && [ $METADTA_COLUMN=='' ]
 then
 qiime diversity beta-group-significance \
 --i-distance-matrix $INPUT_DIR/core-metrics-results/unweighted_unifrac_distance_matrix.qza \
