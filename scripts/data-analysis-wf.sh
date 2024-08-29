@@ -4,7 +4,7 @@ SKIP=0
 INPUT_DIR=$BASE_DIR/input
 OUTPUT_DIR=$BASE_DIR/output
 RELATIVE_OUTPUT_DIR=../output # Relative path to input directory from output directory
-RAW_DATA_DIR=$BASE_DIR/input/raw-data
+RAW_DATA_DIR=$BASE_DIR/input/raw_data
 BARCODES_FILE=$INPUT_DIR/mapping.txt
 BARCODES_FILE=$INPUT_DIR/mapping.tsv
 #BARCODES_FILE=$INPUT_DIR/metadata.tsv
@@ -236,9 +236,9 @@ fi
 
 
 
-if [ ! -f $INPUT_DIR/core-metrics-results/shannon_vector.qza ]
+if [ ! -f $INPUT_DIR/core-metrics-results/unweighted_unifrac_distance_matrix.qza ]
 then
-    if [ ! -f $OUTPUT_DIR/core-metrics-results/observed-otus-group-significance.qzv ] && [ $METADTA_COLUMN=='' ]
+    if [ ! -f $OUTPUT_DIR/core-metrics-results/unweighted-unifrac-transect-name-significance.qzv ] && [ $METADTA_COLUMN=='' ]
     then
         qiime diversity beta-group-significance \
         --i-distance-matrix $INPUT_DIR/core-metrics-results/unweighted_unifrac_distance_matrix.qza \
