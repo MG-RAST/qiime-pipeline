@@ -377,6 +377,114 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
     link_output(demux_viz_output_name, input_dir)
 
 
+# Create a function which executes the qiime scripts from https://forum.qiime2.org/t/relative-abundances-of-taxonomy-analysis/4939/6
+# Start with the qiime taxa collapse script
+# def taxa_collapse(input_dir, output_dir):
+#     # qiime taxa collapse \
+#     # --i-table $INPUT_DIR/table.qza \
+#     # --i-taxonomy $INPUT_DIR/taxonomy.qza \
+#     # --p-level 6 \
+#     # --o-collapsed-table $OUTPUT_DIR/collapsed-table.qza
+#     logger.info('Running taxa collapse')
+#     results['taxa_collapse'] = subprocess.run(['qiime', 'taxa', 'collapse',
+#                                                '--i-table', os.path.join(input_dir, 'table.qza'),
+#                                                '--i-taxonomy', os.path.join(input_dir, 'taxonomy.qza'),
+#                                                '--p-level', '6',
+#                                                '--o-collapsed-table', os.path.join(output_dir, 'collapsed-table.qza')])
+#     logger.debug('Taxa collapse output: {}'.format(results['taxa_collapse']))
+
+def relative_abundance_of_taxonomy( input_dir, output_dir):
+    results = {}
+
+    #     qiime taxa collapse \
+    #   --i-table feature-table.qza \
+    #   --i-taxonomy taxonomy.qza \
+    #   --p-level 2 \
+    #   --o-collapsed-table phyla-table.qza 
+    # Where feature-table.qza is from output of dada2/deblur and the taxonomy.qza file comes from the classifier I've linked above.
+    # Now we will convert this new frequency table to relative-frequency:
+
+    if not os.path.exists(os.path.join(input_dir, 'feature-table.qza')):
+        raise ValueError('Feature table not found in input directory')
+    if not os.path.exists(os.path.join(input_dir, 'taxonomy.qza')):
+        raise ValueError('Taxonomy file not found in input directory')
+    
+    if os.path.exists(os.path.join(output_dir, 'phyla-table.qza')):
+        logger.info('Phyla table already exists. Skipping')
+    else:
+        logger.info('Running taxa collapse')
+        results['taxa_collapse'] = subprocess.run(['qiime', 'taxa', 'collapse',
+                                                '--i-table', os.path.join(input_dir, 'feature-table.qza'),
+                                                '--i-taxonomy', os.path.join(input_dir, 'taxonomy.qza'),
+                                                '--p-level', '2',
+                                                '--o-collapsed-table', os.path.join(output_dir, 'phyla-table.qza')])
+        logger.debug('Taxa collapse output: {}'.format(results['taxa_collapse']))
+
+    link_output(os.path.join(output_dir, 'phyla-table.qza'), input_dir)    
+
+    # qiime feature-table relative-frequency \
+    # --i-table phyla-table.qza \
+    # --o-realtive-frequency-table rel-phyla-table.qza
+    # This new artifact now has the relative-abundances we want. To get this into a text file we first export the data which is in biom format:
+
+    if os.path.exists(os.path.join(output_dir, 'rel-phyla-table.qza')):
+        logger.info('Relative frequency table already exists. Skipping')
+    else:
+        results['relative_frequency'] = subprocess.run(['qiime', 'feature-table', 'relative-frequency',
+                                                        '--i-table', os.path.join(output_dir, 'phyla-table.qza'),
+                                                        '--o-relative-frequency-table', os.path.join(output_dir, 'rel-phyla-table.qza')])
+        logger.debug('Relative frequency output: {}'.format(results['relative_frequency']))
+
+    link_output(os.path.join(output_dir, 'rel-phyla-table.qza'), input_dir)
+
+    # qiime tools export rel-phyla-table.qza \
+    # --output-dir rel-table
+
+    if os.path.exists(os.path.join(output_dir, 'rel-table')):
+        logger.info('Relative table directory already exists. Skipping')
+    else:
+        results['export'] = subprocess.run(['qiime', 'tools', 'export', os.path.join(output_dir, 'rel-phyla-table.qza'),
+                                            '--output-dir', os.path.join(output_dir, 'rel-table')])
+        logger.debug('Export output: {}'.format(results['export']))
+
+    link_output(os.path.join(output_dir, 'rel-table'), input_dir)
+
+
+    # We now have our new relative-frequency table in .biom format. Let's convert this to a text file that we can open easily:
+
+    # # first move into the new directory
+    # cd rel-table
+    # # note that the table has been automatically labelled feature-table.biom
+    # # You might want to change this filename for calrity
+    # biom convert -i feature-table.biom -o rel-phyla-table.tsv --to-tsv
+
+    if not os.path.exists(os.path.join(output_dir, 'rel-table', 'feature-table.biom')):
+        logger.error('Feature table does not exists. Exiting')
+        return
+    
+    if os.path.exists(os.path.join(output_dir, 'rel-table', 'rel-phyla-table.tsv')):
+        logger.info('Relative phyla table already exists. Skipping')
+    else:
+        # os.chdir(os.path.join(output_dir, 'rel-table'))
+        # results['biom_convert'] = subprocess.run(['biom', 'convert', '-i', 'feature-table.biom',
+        #                                           '-o', 'rel-phyla-table.tsv', '--to-tsv'])
+        logger.debug('Biom convert output: {}'.format(results['biom_convert']))
+
+        results['biom_convert'] = subprocess.run(['biom', 'convert', 
+                                                  '-i', os.path.join( input_dir , "rel-table", 'feature-table.biom'),
+                                                  '-o', os.path.join( outputdir , "rel-table" ,'rel-phyla-table.tsv'), 
+                                                  '--to-tsv'])
+
+
+    link_output(os.path.join(output_dir, 'rel-table', 'rel-phyla-table.tsv'), input_dir)
+
+
+
+
+
+def relative_abundance_of_taxa(input_dir, output_dir):
+
+
 def run_tool(name, args):
     # Run a QIIME tool with the given arguments
     # qiime <name> <args>
