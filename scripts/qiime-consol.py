@@ -8,10 +8,122 @@ import datetime
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 import time
-
+import json
+import sys
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+
+class File:
+    # File class to store file information based on https://www.commonwl.org/v1.2/CommandLineTool.html#File
+
+    def __init__(self, name = None):
+
+        self.name = name
+        self.id = None
+        self.location = None
+        self.path = None
+        self.basename = None
+        self.dirname = None
+        self.nameroot = None
+        self.nameext = None
+        self.checksum = None
+        self.size = None
+        self.secondaryFiles = None
+        self.provenance = None
+
+    def __str__(self):
+        return self.name
+    
+    def __repr__(self):
+        return self.name
+    
+    def __getitem__(self, key):
+        return getattr(self, key)
+    
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __iter__(self):
+        return iter(self.__dict__.items())
+
+    # Dump as json
+    def to_json(self):
+        return json.dumps(self.__dict__)
+    
+    def add_secondary_file(self, file):
+        if self.secondaryFiles is None:
+            self.secondaryFiles = []
+        self.secondaryFiles.append(file)
+    
+    def add_file(self, filepath):
+        self.name = os.path.basename(filepath)
+        self.path = filepath
+        self.basename = os.path.basename(filepath)
+        self.dirname = os.path.dirname(filepath)
+        self.nameroot, self.nameext = os.path.splitext(self.basename)
+        self.size = os.path.getsize(filepath)
+        self.checksum = self.md5sum(filepath)
+
+    def md5sum(self, filepath):
+        # Calculate md5sum of file  
+        import hashlib
+        md5 = hashlib.md5()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                md5.update(chunk)  
+    
+
+class FileProvenance:
+
+    def __init__(self, name = None):
+        self.name = name
+        self.id = None
+        self.source = None
+        self.destination = None
+
+class Provenance:
+    # Provenance class to store file provenance information
+
+    def __init__(self, output_dir , name = 'default'):
+        self.output_dir = output_dir
+        self.name = 'None'
+        self.provenance = {}
+
+    def add(self, key, value):
+        self.provenance[key] = value
+
+    def update(self, key, value):
+        self.provenance[key] = value
+        self.write()
+    
+    def write(self):
+        # dump as json
+        with open(self.provenance_file(), 'w') as f:
+            json.dump(self.provenance, f)
+
+    def read(self):
+        with open(self.provenance_file(), 'r') as f:
+            self.provenance = json.load(f)
+        return self.provenance
+    
+    def provenance_file(self):
+        return os.path.join(self.output_dir, self.name , ".prov")
+
+
+    def __getitem__(self, key):
+        return self.provenance[key]
+    
+    def __str__(self):
+        return str(self.provenance)
+    
+    def __repr__(self):
+        return str(self.provenance)
+    
+
+
+
 
 
 # Create input, output and war_data directories in the output directory
@@ -25,6 +137,10 @@ def setup_directories(output_dir):
     os.makedirs(local_raw_data_dir, exist_ok=True)
 
     return local_input_dir, local_output_dir, local_raw_data_dir
+
+def proveance_file(output_dir, name, message):
+    with open(os.path.join(output_dir, name , ".prov"), 'a') as f:
+        f.write(message)
 
 def stage_data(input_dir, output_dir , force = False):
     # # Create output directory and raw data directory
@@ -71,6 +187,8 @@ def stage_data(input_dir, output_dir , force = False):
         else:
             with open(file_path, 'rb') as f_in, gzip.open(new_file_path, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
+
+        proveance_file(output_dir, new_name, "ID: " + new_file_path)
 
     # Use ThreadPoolExecutor to parallelize the process, use max 3 threads
     futures = []
@@ -148,13 +266,22 @@ def stage_data(input_dir, output_dir , force = False):
         f.write('Mapping file stored in {}\n'.format(os.path.join(output_dir, 'mapping.txt')))
         f.write('Data staged at {}\n'.format(datetime.datetime.now()))
 
-def link_output(output_name, input_dir):
+def link_output(source, target_dir):
     # Create symlink from output_name to input_dir/filename
-    filename = os.path.basename(output_name)
-    output_path = os.path.join(input_dir, filename)
+    
+    if not os.path.exists(source):
+        raise ValueError('Source file does not exist')
+    
+    filename = os.path.basename(source)
+    target = os.path.join( "../output" , filename)
+
+    output_path = os.path.join(target_dir, filename)
     if os.path.exists(output_path):
-        os.remove(output_path)
-    os.symlink(filename, output_path)
+        # os.remove(output_path)
+        logger.info('Output file already exists in input directory. Skipping')
+    else:
+        logger.debug('Creating symlink from {} to {}'.format(source, output_path))
+        os.symlink(target , output_path )
 
 def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
     # Create output directory and raw data directory
@@ -171,6 +298,7 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
 
     import_input_dir = os.path.join(input_dir ,'raw_data')
     import_output_name = 'paired-end-demux.qza'
+    import_output = os.path.join(output_dir, import_output_name)
     
     # Run qiime import
     #     qiime tools import \
@@ -179,18 +307,19 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
     #       --output-path $OUTPUT_DIR/paired-end-sequences.qza
 
     # check if output already exists, skip if it does unless force is set to True
-    if os.path.exists(import_output_name):
-        logger.info('Import output already exists. Skipping')
+    if os.path.exists(import_output):
+        logger.info(f'Import: {import_output_name} already exists. Skipping')
     else:
+        logger.info('Running import on {}'.format(import_input_dir))
+        logger.debug("Options: --type EMPPairedEndSequences --input-path {} --output-path {}".format(import_input_dir, import_output))
         results['import']=subprocess.run(['qiime', 'tools', 'import', 
                            '--type', 'EMPPairedEndSequences', 
                            '--input-path', import_input_dir, 
-                           '--output-path', import_output_name ])
+                           '--output-path', import_output ])
 
     # link the output to the input directory
-    link_output(import_output_name, input_dir)
-
-
+    logger.debug('Staging import output to input directory: {}'.format(import_output))
+    link_output(import_output, input_dir)
 
     # Run qiime demux
     # qiime demux emp-paired \
@@ -211,18 +340,21 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
     if os.path.exists(demux_output) and os.path.exists(demux_details_output):
         logger.info('Demux outputs already exist. Skipping')
     else:
+        logger.info('Running demux')
+        logger.debug("Options: emp-paired --m-barcodes-file {} --m-barcodes-column barcode-sequence --p-rev-comp-mapping-barcodes --p-rev-comp-barcodes --i-seqs {} --o-per-sample-sequences {} --o-error-correction-details {}".format(os.path.join(input_dir, 'mapping.txt'), import_output_name, demux_output, demux_details_output))
         results['demux'] = subprocess.run(['qiime', 'demux', 'emp-paired',
                                             '--m-barcodes-file', os.path.join(input_dir, 'mapping.txt'),
-                                            '--m-barcodes-column', 'barcode-sequence',
+                                            '--m-barcodes-column', 'BarcodeSequence', #'barcode-sequence',
                                             '--p-rev-comp-mapping-barcodes',
                                             '--p-rev-comp-barcodes',
-                                            '--i-seqs', import_output_name,
+                                            '--i-seqs', import_output,
                                             '--o-per-sample-sequences', demux_output,
                                             '--o-error-correction-details', demux_details_output])
     
     link_output(demux_output_name, input_dir)
     link_output(demux_details_output_name, input_dir)
 
+    sys.exit(0)
     # Run qiime demux summarize
     # qiime demux summarize \
     # --i-data $INPUT_DIR/demux-full.qza \
@@ -235,11 +367,23 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
     if os.path.exists(demux_viz_output):
         logger.info('Demux visualization output already exists. Skipping')
     else:
+        logger.info('Running demux summarize')
+        logger.debug("Options: --i-data {} --o-visualization {}".format(demux_output, demux_viz_output))
         results['demux_viz'] = subprocess.run(['qiime', 'demux', 'summarize',
                                                '--i-data', demux_output,
                                                '--o-visualization', demux_viz_output])
+        logger.debug('Demux visualization output: {}'.format(results['demux_viz']))
     
     link_output(demux_viz_output_name, input_dir)
+
+
+def run_tool(name, args):
+    # Run a QIIME tool with the given arguments
+    # qiime <name> <args>
+    logger.info('Running tool {}'.format(name))
+    logger.debug('Arguments: {}'.format(args))
+    results = subprocess.run(['qiime', 'tool' , name] + args)
+    logger.debug('Results: {}'.format(results))
 
 
 
@@ -262,6 +406,12 @@ def main():
     stage_parser = subparsers.add_parser('setup', help='Stage data')
     stage_parser.add_argument('input_dir', type=str, help='Input directory')
     stage_parser.add_argument('output_dir', type=str, help='Output directory')
+
+    # Tool qiime subparser
+    tool_parser = subparsers.add_parser('tool', help='Run QIIME tool')
+    # collect all arguments in a list
+    tool_parser.add_argument('name', type=str, help='Name of the tool')
+    tool_parser.add_argument('args', nargs=args.REMAINDER  , default=["--help"] , help='Arguments for the tool')
 
     # Run qiime subparser
     run_parser = subparsers.add_parser('run', help='Run QIIME')
@@ -331,9 +481,14 @@ def main():
         elif args.subcommand == 'denoise':
             denoise_data(args.input_dir, args.output_dir)
         elif args.subcommand == 'workflow':
-            run_workflow(args.input_dir, args.output_dir, args.p_trunc_len_f, args.p_trunc_len_r)
+            run_workflow(args.input_dir, args.p_trunc_len_f, args.p_trunc_len_r)
         else:
             raise ValueError('Invalid subcommand')
+    elif args.command == 'tool':
+            run_tool(args.name, args.args)
+    else:
+        logger.error('Invalid command {}'.format(args.command))
+        # raise ValueError('Invalid command')
 
 if __name__ == '__main__':
     main()
