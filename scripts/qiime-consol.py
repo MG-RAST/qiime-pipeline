@@ -283,7 +283,7 @@ def link_output(source, target_dir):
         logger.debug('Creating symlink from {} to {}'.format(source, output_path))
         os.symlink(target , output_path )
 
-def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
+def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000):
     # Create output directory and raw data directory
   
     # check if the input directory exists
@@ -433,7 +433,78 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
     link_output(denoise_output, input_dir)
     link_output(table_output, input_dir)
     link_output(stats_output, input_dir)
-    
+
+    # Run summarize feature table
+    # qiime feature-table summarize \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --o-visualization $OUTPUT_DIR/table-dada2.qzv \
+    # --m-sample-metadata-file $INPUT_DIR/mapping.txt
+
+    table_viz_output_name = 'table-dada2.qzv'
+    table_viz_output = os.path.join(output_dir, table_viz_output_name)  
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(table_viz_output):
+        logger.info('Table visualization output already exists. Skipping')
+    else:
+        logger.info('Running feature table summarize')
+        logger.debug("Options: --i-table {} --o-visualization {} --m-sample-metadata-file {}".format(table_output, table_viz_output, os.path.join(input_dir, 'mapping.txt')))
+        results['table_viz'] = subprocess.run(['qiime', 'feature-table', 'summarize',
+                                              '--i-table', table_output,
+                                              '--o-visualization', table_viz_output,
+                                              '--m-sample-metadata-file', os.path.join(input_dir, 'mapping.txt')])
+        logger.debug('Table visualization output: {}'.format(results['table_viz']))
+
+    link_output(table_viz_output, input_dir)
+
+    ### Run summarizing feature sequences
+    # qiime feature-table tabulate-seqs \
+    # --i-data $INPUT_DIR/rep-seqs-dada2.qza \
+    # --o-visualization $OUTPUT_DIR/rep-seqs-dada2.qzv
+
+    rep_seq_viz_output_name = 'rep-seqs-dada2.qzv'
+    rep_seq_viz_output = os.path.join(output_dir, rep_seq_viz_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(rep_seq_viz_output):
+        logger.info('Representative sequence visualization output already exists. Skipping')
+    else:
+        logger.info('Running feature table tabulate sequences')
+        logger.debug("Options: --i-data {} --o-visualization {}".format(denoise_output, rep_seq_viz_output))
+        results['rep_seq_viz'] = subprocess.run(['qiime', 'feature-table', 'tabulate-seqs',
+                                                '--i-data', denoise_output,
+                                                '--o-visualization', rep_seq_viz_output])
+        logger.debug('Representative sequence visualization output: {}'.format(results['rep_seq_viz']))
+
+    link_output(rep_seq_viz_output, input_dir)
+
+    ### Run qiime metadata tabulate
+    # qiime metadata tabulate \
+    # --m-input-file $INPUT_DIR/stats-dada2.qza \
+    # --o-visualization $OUTPUT_DIR/stats-dada2.qzv
+
+    stats_viz_output_name = 'stats-dada2.qzv'
+    stats_viz_output = os.path.join(output_dir, stats_viz_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(stats_viz_output):
+        logger.info('Stats visualization output already exists. Skipping')
+    else:
+        logger.info('Running metadata tabulate')
+        logger.debug("Options: --m-input-file {} --o-visualization {}".format(stats_output, stats_viz_output))
+        results['stats_viz'] = subprocess.run(['qiime', 'metadata', 'tabulate',
+                                              '--m-input-file', stats_output,
+                                              '--o-visualization', stats_viz_output])
+        logger.debug('Stats visualization output: {}'.format(results['stats_viz']))
+
+    link_output(stats_viz_output, input_dir)
+
+
+
+
+    # Run qiime metadata tabulate
+
+
 
 # Create a function which executes the qiime scripts from https://forum.qiime2.org/t/relative-abundances-of-taxonomy-analysis/4939/6
 # Start with the qiime taxa collapse script
