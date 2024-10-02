@@ -7,10 +7,125 @@ import gzip
 import glob
 import logging
 import datetime
-
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
+import time
+import json
+import sys
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+
+class File:
+    # File class to store file information based on https://www.commonwl.org/v1.2/CommandLineTool.html#File
+
+    def __init__(self, name = None):
+
+        self.name = name
+        self.id = None
+        self.location = None
+        self.path = None
+        self.basename = None
+        self.dirname = None
+        self.nameroot = None
+        self.nameext = None
+        self.checksum = None
+        self.size = None
+        self.secondaryFiles = None
+        self.provenance = None
+
+    def __str__(self):
+        return self.name
+    
+    def __repr__(self):
+        return self.name
+    
+    def __getitem__(self, key):
+        return getattr(self, key)
+    
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __iter__(self):
+        return iter(self.__dict__.items())
+
+    # Dump as json
+    def to_json(self):
+        return json.dumps(self.__dict__)
+    
+    def add_secondary_file(self, file):
+        if self.secondaryFiles is None:
+            self.secondaryFiles = []
+        self.secondaryFiles.append(file)
+    
+    def add_file(self, filepath):
+        self.name = os.path.basename(filepath)
+        self.path = filepath
+        self.basename = os.path.basename(filepath)
+        self.dirname = os.path.dirname(filepath)
+        self.nameroot, self.nameext = os.path.splitext(self.basename)
+        self.size = os.path.getsize(filepath)
+        self.checksum = self.md5sum(filepath)
+
+    def md5sum(self, filepath):
+        # Calculate md5sum of file  
+        import hashlib
+        md5 = hashlib.md5()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                md5.update(chunk)  
+    
+
+class FileProvenance:
+
+    def __init__(self, name = None):
+        self.name = name
+        self.id = None
+        self.source = None
+        self.destination = None
+
+class Provenance:
+    # Provenance class to store file provenance information
+
+    def __init__(self, output_dir , name = 'default'):
+        self.output_dir = output_dir
+        self.name = 'None'
+        self.provenance = {}
+
+    def add(self, key, value):
+        self.provenance[key] = value
+
+    def update(self, key, value):
+        self.provenance[key] = value
+        self.write()
+    
+    def write(self):
+        # dump as json
+        with open(self.provenance_file(), 'w') as f:
+            json.dump(self.provenance, f)
+
+    def read(self):
+        with open(self.provenance_file(), 'r') as f:
+            self.provenance = json.load(f)
+        return self.provenance
+    
+    def provenance_file(self):
+        return os.path.join(self.output_dir, self.name , ".prov")
+
+
+    def __getitem__(self, key):
+        return self.provenance[key]
+    
+    def __str__(self):
+        return str(self.provenance)
+    
+    def __repr__(self):
+        return str(self.provenance)
+    
+
+
+
 
 
 # Create input, output and war_data directories in the output directory
@@ -24,6 +139,10 @@ def setup_directories(output_dir):
     os.makedirs(local_raw_data_dir, exist_ok=True)
 
     return local_input_dir, local_output_dir, local_raw_data_dir
+
+def proveance_file(output_dir, name, message):
+    with open(os.path.join(output_dir, name , ".prov"), 'a') as f:
+        f.write(message)
 
 def stage_data(input_dir, output_dir , force = False):
     # # Create output directory and raw data directory
@@ -45,7 +164,9 @@ def stage_data(input_dir, output_dir , force = False):
     if len(files_to_process) == 0:
         raise ValueError('No files found in input directory')
 
-    for file_path in files_to_process:
+    # Parallelize this loop to speed up the process
+
+    def process_file(file_path, raw_data_dir, force):
         file_name = os.path.basename(file_path)
         if '_R1_' in file_name:
             new_name = 'forward.fastq.gz'
@@ -54,20 +175,65 @@ def stage_data(input_dir, output_dir , force = False):
         elif '_I1_' in file_name:
             new_name = 'barcodes.fastq.gz'
         else:
-            continue
+            return
 
         new_file_path = os.path.join(raw_data_dir, new_name)
 
         # Copy and compress if necessary
         if os.path.exists(new_file_path) and not force:
             logger.info('File {} already exists in raw data directory. Skipping'.format(new_file_path))
+            return
 
         if file_path.endswith('.gz'):
             shutil.copy(file_path, new_file_path)
         else:
             with open(file_path, 'rb') as f_in, gzip.open(new_file_path, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
-        
+
+        proveance_file(output_dir, new_name, "ID: " + new_file_path)
+
+    # Use ThreadPoolExecutor to parallelize the process, use max 3 threads
+    futures = []
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        for file_path in files_to_process:
+            logger.info('Processing file {}'.format(file_path))
+            # future = executor.submit(process_file, file_path, raw_data_dir, force)
+            # future.set_result(file_path)
+            # futures.append(future)
+            futures.append(executor.submit(process_file, file_path, raw_data_dir, force))
+    
+        logger.info(f'Waiting for {len(futures)} files to be processed')
+        while len(futures) > 0:
+            
+            for future in futures:
+                # if done print the result
+                if future.done():
+                    print()
+                    # logger.info('File processed {}'.format(future.result()))
+                    logger.info('File processed')
+                    # logger.info(future.result())
+                    futures.remove(future)
+                    logger.info(f'Waiting for {len(futures)} files to be processed')
+                else:
+                    # Add a dot to the console to show progress, append to the same line
+                    print('.', end='', flush=True)
+
+            # Sleep for 30 seconds before checking again
+            time.sleep(10)
+           
+
+    
+
+
+    logger.info('Data staging complete')
+
+
+
+        # with ThreadPoolExecutor() as executor:
+        # executor.map(lambda file_path: process_file(file_path, raw_data_dir, force), files_to_process)
+
+
+
     # Find mapping file in input dir and copy it into outputif it exists and copy it to the output directory as mapping.txt
     # throw an error if it does not exist
 
@@ -102,6 +268,521 @@ def stage_data(input_dir, output_dir , force = False):
         f.write('Mapping file stored in {}\n'.format(os.path.join(output_dir, 'mapping.txt')))
         f.write('Data staged at {}\n'.format(datetime.datetime.now()))
 
+def link_output(source, target_dir):
+    # Create symlink from output_name to input_dir/filename
+    
+    if not os.path.exists(source):
+        raise ValueError('Source file does not exist')
+    
+    filename = os.path.basename(source)
+    target = os.path.join( "../output" , filename)
+
+    output_path = os.path.join(target_dir, filename)
+    if os.path.exists(output_path):
+        # os.remove(output_path)
+        logger.info('Output file already exists in input directory. Skipping')
+    else:
+        logger.debug('Creating symlink from {} to {}'.format(source, output_path))
+        os.symlink(target , output_path )
+
+
+def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000):
+
+    # Run qiime diversity core-metrics-phylogenetic
+    # qiime diversity core-metrics-phylogenetic \
+    # --i-phylogeny $INPUT_DIR/rooted-tree.qza \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --p-sampling-depth 1100 \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --output-dir $OUTPUT_DIR/core-metrics-results
+
+    input_dir = os.path.join(base_dir, 'input')
+    output_dir = os.path.join(base_dir, 'output')
+
+    core_metrics_output_dir = os.path.join(output_dir, 'core-metrics-results')
+
+    # check if output directory already exists, skip if it does unless force is set to True
+    if os.path.exists(core_metrics_output_dir):
+        logger.info('Core metrics results directory already exists. Skipping')
+    else:
+        logger.info('Running core metrics')
+        logger.debug("Options: --i-phylogeny {} --i-table {} --p-sampling-depth {} --m-metadata-file {} --output-dir {}".format(os.path.join(input_dir, 'rooted-tree.qza'), os.path.join(input_dir, 'table-dada2.qza'), p_sampling_depth, os.path.join(input_dir, 'mapping.txt'), core_metrics_output_dir))
+        results['core_metrics'] = subprocess.run(['qiime', 'diversity', 'core-metrics-phylogenetic',
+                                                 '--i-phylogeny', os.path.join(input_dir, 'rooted-tree.qza'),
+                                                 '--i-table', os.path.join(input_dir, 'table-dada2.qza'),
+                                                 '--p-sampling-depth', str(p_sampling_depth),
+                                                 '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                 '--output-dir', core_metrics_output_dir])
+        logger.debug('Core metrics output: {}'.format(results['core_metrics']))
+
+    link_output(core_metrics_output_dir, input_dir)
+
+    # Run qiime diversity alpha-group-significance on faith_pd_vector
+    # qiime diversity alpha-group-significance \
+    # --i-alpha-diversity $OUTPUT_DIR/core-metrics-results/faith_pd_vector.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --o-visualization $OUTPUT_DIR/core-metrics-results/faith-pd-group-significance.qzv
+
+    alpha_group_significance_output_name = 'faith-pd-group-significance.qzv'
+    alpha_group_significance_output = os.path.join(core_metrics_output_dir, alpha_group_significance_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(alpha_group_significance_output):
+        logger.info('Alpha group significance output already exists. Skipping')
+    else:
+        logger.info('Running alpha group significance')
+        logger.debug("Options: --i-alpha-diversity {} --m-metadata-file {} --o-visualization {}".format(os.path.join(core_metrics_output_dir, 'faith_pd_vector.qza'), os.path.join(input_dir, 'mapping.txt'), alpha_group_significance_output))
+        results['alpha_group_significance'] = subprocess.run(['qiime', 'diversity', 'alpha-group-significance',
+                                                             '--i-alpha-diversity', os.path.join(core_metrics_output_dir, 'faith_pd_vector.qza'),
+                                                             '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                             '--o-visualization', alpha_group_significance_output])
+        logger.debug('Alpha group significance output: {}'.format(results['alpha_group_significance']))
+
+    link_output(alpha_group_significance_output, input_dir)
+
+
+    # Run qiime diversity alpha-group-significance on shannon_vector
+    # qiime diversity alpha-group-significance \
+    # --i-alpha-diversity $OUTPUT_DIR/core-metrics-results/shannon_vector.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --o-visualization $OUTPUT_DIR/core-metrics-results/shannon-group-significance.qzv
+
+    shannon_group_significance_output_name = 'shannon-group-significance.qzv'
+    shannon_group_significance_output = os.path.join(core_metrics_output_dir, shannon_group_significance_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(shannon_group_significance_output):
+        logger.info('Shannon group significance output already exists. Skipping')
+    else:
+        logger.info('Running shannon group significance')
+        logger.debug("Options: --i-alpha-diversity {} --m-metadata-file {} --o-visualization {}".format(os.path.join(core_metrics_output_dir, 'shannon_vector.qza'), os.path.join(input_dir, 'mapping.txt'), shannon_group_significance_output))
+        results['shannon_group_significance'] = subprocess.run(['qiime', 'diversity', 'alpha-group-significance',
+                                                               '--i-alpha-diversity', os.path.join(core_metrics_output_dir, 'shannon_vector.qza'),
+                                                               '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                               '--o-visualization', shannon_group_significance_output])
+        logger.debug('Shannon group significance output: {}'.format(results['shannon_group_significance']))
+
+    link_output(shannon_group_significance_output, input_dir)
+
+    # Run qiime diversity alpha-group-significance on evenness_vector
+    # qiime diversity alpha-group-significance \
+    # --i-alpha-diversity $OUTPUT_DIR/core-metrics-results/evenness_vector.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --o-visualization $OUTPUT_DIR/core-metrics-results/evenness-group-significance.qzv
+
+    evenness_group_significance_output_name = 'evenness-group-significance.qzv'
+    evenness_group_significance_output = os.path.join(core_metrics_output_dir, evenness_group_significance_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(evenness_group_significance_output):
+        logger.info('Evenness group significance output already exists. Skipping')
+    else:
+        logger.info('Running evenness group significance')
+        logger.debug("Options: --i-alpha-diversity {} --m-metadata-file {} --o-visualization {}".format(os.path.join(core_metrics_output_dir, 'evenness_vector.qza'), os.path.join(input_dir, 'mapping.txt'), evenness_group_significance_output))
+        results['evenness_group_significance'] = subprocess.run(['qiime', 'diversity', 'alpha-group-significance',
+                                                                '--i-alpha-diversity', os.path.join(core_metrics_output_dir, 'evenness_vector.qza'),
+                                                                '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                                '--o-visualization', evenness_group_significance_output])
+        logger.debug('Evenness group significance output: {}'.format(results['evenness_group_significance']))
+
+    link_output(evenness_group_significance_output, input_dir)
+    
+
+
+
+    # Run qiime diversity alpha-rarefaction
+    # qiime diversity alpha-rarefaction \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --i-phylogeny $INPUT_DIR/rooted-tree.qza \
+    # --p-max-depth 1100 \
+    # --p-steps 10 \
+    # --output-dir $OUTPUT_DIR/alpha-rarefaction-results
+
+    alpha_rarefaction_output_dir = os.path.join(output_dir, 'alpha-rarefaction-results')
+
+    # check if output directory already exists, skip if it does unless force is set to True
+    if os.path.exists(alpha_rarefaction_output_dir):
+        logger.info('Alpha rarefaction results directory already exists. Skipping')
+    else:
+        logger.info('Running alpha rarefaction')
+        logger.debug("Options: --i-table {} --i-phylogeny {} --p-max-depth {} --p-steps {} --output-dir {}".format(os.path.join(input_dir, 'table-dada2.qza'), os.path.join(input_dir, 'rooted-tree.qza'), p_max_depth, p_steps, alpha_rarefaction_output_dir))
+        results['alpha_rarefaction'] = subprocess.run(['qiime', 'diversity', 'alpha-rarefaction',
+                                                     '--i-table', os.path.join(input_dir, 'table-dada2.qza'),
+                                                     '--i-phylogeny', os.path.join(input_dir, 'rooted-tree.qza'),
+                                                     '--p-max-depth', str(p_max_depth),
+                                                     '--p-steps', str(p_steps),
+                                                     '--output-dir', alpha_rarefaction_output_dir])
+        logger.debug('Alpha rarefaction output: {}'.format(results['alpha_rarefaction']))
+
+    link_output(alpha_rarefaction_output_dir, input_dir)
+
+    # Run qiime diversity beta-group-significance
+    # qiime diversity beta-group-significance \
+    # --i-distance-matrix $OUTPUT_DIR/core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --m-metadata-column BodySite \
+    # --o-visualization $OUTPUT_DIR/core-metrics-results/unweighted-unifrac-body-site-significance.qzv \
+    # --p-pairwise
+
+    beta_group_significance_output_name = 'unweighted-unifrac-body-site-significance.qzv'
+    beta_group_significance_output = os.path.join(core_metrics_output_dir, beta_group_significance_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(beta_group_significance_output):
+        logger.info('Beta group significance output already exists. Skipping')
+    else:
+        logger.info('Running beta group significance')
+        logger.debug("Options: --i-distance-matrix {} --m-metadata-file {} --m-metadata-column BodySite --o-visualization {} --p-pairwise".format(os.path.join(core_metrics_output_dir, 'unweighted_unifrac_distance_matrix.qza'), os.path.join(input_dir, 'mapping.txt'), beta_group_significance_output))
+        results['beta_group_significance'] = subprocess.run(['qiime', 'diversity', 'beta-group-significance',
+                                                            '--i-distance-matrix', os.path.join(core_metrics_output_dir, 'unweighted_unifrac_distance_matrix.qza'),
+                                                            '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                            '--m-metadata-column', 'BodySite',
+                                                            '--o-visualization', beta_group_significance_output,
+                                                            '--p-pairwise'])
+        logger.debug('Beta group significance output: {}'.format(results['beta_group_significance']))
+
+    link_output(beta_group_significance_output, input_dir)
+
+    # Run qiime diversity pcoa
+
+def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000):
+    # Create output directory and raw data directory
+  
+    # check if the input directory exists
+    if not os.path.exists(base_dir):
+        raise ValueError('Input directory does not exist')
+    
+    results = {}
+    
+    input_dir = os.path.join(base_dir, 'input')
+    output_dir = os.path.join(base_dir, 'output')
+
+
+    import_input_dir = os.path.join(input_dir ,'raw_data')
+    import_output_name = 'paired-end-demux.qza'
+    import_output = os.path.join(output_dir, import_output_name)
+    
+    # Run qiime import
+    #     qiime tools import \
+    #       --type EMPPairedEndSequences \
+    #       --input-path $RAW_DATA_DIR \
+    #       --output-path $OUTPUT_DIR/paired-end-sequences.qza
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(import_output):
+        logger.info(f'Import: {import_output_name} already exists. Skipping')
+    else:
+        logger.info('Running import on {}'.format(import_input_dir))
+        logger.debug("Options: --type EMPPairedEndSequences --input-path {} --output-path {}".format(import_input_dir, import_output))
+        results['import']=subprocess.run(['qiime', 'tools', 'import', 
+                           '--type', 'EMPPairedEndSequences', 
+                           '--input-path', import_input_dir, 
+                           '--output-path', import_output ])
+
+    # link the output to the input directory
+    logger.debug('Staging import output to input directory: {}'.format(import_output))
+    link_output(import_output, input_dir)
+
+    # Run qiime demux
+    # qiime demux emp-paired \
+    # --m-barcodes-file $BARCODES_FILE \
+    # --m-barcodes-column barcode-sequence \
+    # --p-rev-comp-mapping-barcodes \
+    # --p-rev-comp-barcodes \
+    # --i-seqs $INPUT_DIR/paired-end-sequences.qza \
+    # --o-per-sample-sequences $OUTPUT_DIR/demux-full.qza \
+    # --o-error-correction-details $OUTPUT_DIR/demux-details.qza
+
+    demux_output_name = 'demux-full.qza'
+    demux_details_output_name = 'demux-details.qza'
+    demux_output = os.path.join(output_dir, demux_output_name)
+    demux_details_output = os.path.join(output_dir, demux_details_output_name)
+
+    # check if outputs already exist, skip if they do unless force is set to True
+    if os.path.exists(demux_output) and os.path.exists(demux_details_output):
+        logger.info('Demux outputs already exist. Skipping')
+    else:
+        logger.info('Running demux')
+        logger.debug("Options: emp-paired --m-barcodes-file {} --m-barcodes-column barcode-sequence --p-rev-comp-mapping-barcodes --p-rev-comp-barcodes --i-seqs {} --o-per-sample-sequences {} --o-error-correction-details {}".format(os.path.join(input_dir, 'mapping.txt'), import_output_name, demux_output, demux_details_output))
+        results['demux'] = subprocess.run(['qiime', 'demux', 'emp-paired',
+                                            '--m-barcodes-file', os.path.join(input_dir, 'mapping.txt'),
+                                            '--m-barcodes-column', 'BarcodeSequence', #'barcode-sequence',
+                                            '--p-rev-comp-mapping-barcodes',
+                                            '--p-rev-comp-barcodes',
+                                            '--i-seqs', import_output,
+                                            '--o-per-sample-sequences', demux_output,
+                                            '--o-error-correction-details', demux_details_output])
+    
+    link_output(demux_output, input_dir)
+    link_output(demux_details_output, input_dir)
+
+    # Run qiime demux summarize
+    # qiime demux summarize \
+    # --i-data $INPUT_DIR/demux-full.qza \
+    # --o-visualization $OUTPUT_DIR/demux-full.qzv
+
+    demux_viz_output_name = 'demux-full.qzv'
+    demux_viz_output = os.path.join(output_dir, demux_viz_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(demux_viz_output):
+        logger.info('Demux visualization output already exists. Skipping')
+    else:
+        logger.info('Running demux summarize')
+        logger.debug("Options: --i-data {} --o-visualization {}".format(demux_output, demux_viz_output))
+        results['demux_viz'] = subprocess.run(['qiime', 'demux', 'summarize',
+                                               '--i-data', demux_output,
+                                               '--o-visualization', demux_viz_output])
+        logger.debug('Demux visualization output: {}'.format(results['demux_viz']))
+    
+    link_output(demux_viz_output, input_dir)
+
+    # Export the demux visualization
+    # qiime tools export \
+    # --input-path $OUTPUT_DIR/demux-full.qzv \
+    # --output-path $OUTPUT_DIR/demux-full
+
+    demux_viz_export_dir = os.path.join(output_dir, 'demux-full')
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(demux_viz_export_dir):
+        logger.info('Demux visualization export directory already exists. Skipping')
+    else:
+        logger.info('Exporting demux visualization')
+        logger.debug("Options: --input-path {} --output-path {}".format(demux_viz_output, demux_viz_export_dir))
+        results['demux_viz_export'] = subprocess.run(['qiime', 'tools', 'export',
+                                                      '--input-path', demux_viz_output,
+                                                      '--output-path', demux_viz_export_dir])
+        logger.debug('Demux visualization export output: {}'.format(results['demux_viz_export']))
+
+    link_output(demux_viz_export_dir, input_dir)
+
+    # Run qiime dada2 denoise-paired
+    # qiime dada2 denoise-paired \
+    # --i-demultiplexed-seqs $INPUT_DIR/demux-full.qza \
+    # --p-trim-left-f 0 \
+    # --p-trim-left-r 0 \
+    # --p-trunc-len-f 150 \
+    # --p-trunc-len-r 150 \
+    # --o-representative-sequences $OUTPUT_DIR/rep-seqs-dada2.qza \
+    # --o-table $OUTPUT_DIR/table-dada2.qza \
+    # --o-denoising-stats $OUTPUT_DIR/stats-dada2.qza
+
+    denoise_output_name = 'rep-seqs-dada2.qza'
+    table_output_name = 'table-dada2.qza'
+    stats_output_name = 'stats-dada2.qza'
+    denoise_output = os.path.join(output_dir, denoise_output_name)
+    table_output = os.path.join(output_dir, table_output_name)
+    stats_output = os.path.join(output_dir, stats_output_name)
+
+    # check if outputs already exist, skip if they do unless force is set to True
+    if os.path.exists(denoise_output) and os.path.exists(table_output) and os.path.exists(stats_output):
+        logger.info('Denoise outputs already exist. Skipping')
+    else:
+        logger.info('Running dada2 denoise paired')
+        logger.debug("Options: --i-demultiplexed-seqs {} --p-trim-left-f 0 --p-trim-left-r 0 --p-trunc-len-f {} --p-trunc-len-r {} --o-representative-sequences {} --o-table {} --o-denoising-stats {}".format(demux_output, p_trunc_len_f, p_trunc_len_r, denoise_output, table_output, stats_output))
+        results['denoise'] = subprocess.run(['qiime', 'dada2', 'denoise-paired',
+                                            '--i-demultiplexed-seqs', demux_output,
+                                            '--p-trim-left-f', '0',
+                                            '--p-trim-left-r', '0',
+                                            '--p-trunc-len-f', str(p_trunc_len_f),
+                                            '--p-trunc-len-r', str(p_trunc_len_r),
+                                            '--o-representative-sequences', denoise_output,
+                                            '--o-table', table_output,
+                                            '--o-denoising-stats', stats_output])
+        logger.debug('Denoise output: {}'.format(results['denoise']))
+
+    link_output(denoise_output, input_dir)
+    link_output(table_output, input_dir)
+    link_output(stats_output, input_dir)
+
+    # Run summarize feature table
+    # qiime feature-table summarize \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --o-visualization $OUTPUT_DIR/table-dada2.qzv \
+    # --m-sample-metadata-file $INPUT_DIR/mapping.txt
+
+    table_viz_output_name = 'table-dada2.qzv'
+    table_viz_output = os.path.join(output_dir, table_viz_output_name)  
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(table_viz_output):
+        logger.info('Table visualization output already exists. Skipping')
+    else:
+        logger.info('Running feature table summarize')
+        logger.debug("Options: --i-table {} --o-visualization {} --m-sample-metadata-file {}".format(table_output, table_viz_output, os.path.join(input_dir, 'mapping.txt')))
+        results['table_viz'] = subprocess.run(['qiime', 'feature-table', 'summarize',
+                                              '--i-table', table_output,
+                                              '--o-visualization', table_viz_output,
+                                              '--m-sample-metadata-file', os.path.join(input_dir, 'mapping.txt')])
+        logger.debug('Table visualization output: {}'.format(results['table_viz']))
+
+    link_output(table_viz_output, input_dir)
+
+    ### Run summarizing feature sequences
+    # qiime feature-table tabulate-seqs \
+    # --i-data $INPUT_DIR/rep-seqs-dada2.qza \
+    # --o-visualization $OUTPUT_DIR/rep-seqs-dada2.qzv
+
+    rep_seq_viz_output_name = 'rep-seqs-dada2.qzv'
+    rep_seq_viz_output = os.path.join(output_dir, rep_seq_viz_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(rep_seq_viz_output):
+        logger.info('Representative sequence visualization output already exists. Skipping')
+    else:
+        logger.info('Running feature table tabulate sequences')
+        logger.debug("Options: --i-data {} --o-visualization {}".format(denoise_output, rep_seq_viz_output))
+        results['rep_seq_viz'] = subprocess.run(['qiime', 'feature-table', 'tabulate-seqs',
+                                                '--i-data', denoise_output,
+                                                '--o-visualization', rep_seq_viz_output])
+        logger.debug('Representative sequence visualization output: {}'.format(results['rep_seq_viz']))
+
+    link_output(rep_seq_viz_output, input_dir)
+
+    ### Run qiime metadata tabulate
+    # qiime metadata tabulate \
+    # --m-input-file $INPUT_DIR/stats-dada2.qza \
+    # --o-visualization $OUTPUT_DIR/stats-dada2.qzv
+
+    stats_viz_output_name = 'stats-dada2.qzv'
+    stats_viz_output = os.path.join(output_dir, stats_viz_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(stats_viz_output):
+        logger.info('Stats visualization output already exists. Skipping')
+    else:
+        logger.info('Running metadata tabulate')
+        logger.debug("Options: --m-input-file {} --o-visualization {}".format(stats_output, stats_viz_output))
+        results['stats_viz'] = subprocess.run(['qiime', 'metadata', 'tabulate',
+                                              '--m-input-file', stats_output,
+                                              '--o-visualization', stats_viz_output])
+        logger.debug('Stats visualization output: {}'.format(results['stats_viz']))
+
+    link_output(stats_viz_output, input_dir)
+
+
+
+
+    # Run qiime metadata tabulate
+
+
+
+# Create a function which executes the qiime scripts from https://forum.qiime2.org/t/relative-abundances-of-taxonomy-analysis/4939/6
+# Start with the qiime taxa collapse script
+# def taxa_collapse(input_dir, output_dir):
+#     # qiime taxa collapse \
+#     # --i-table $INPUT_DIR/table.qza \
+#     # --i-taxonomy $INPUT_DIR/taxonomy.qza \
+#     # --p-level 6 \
+#     # --o-collapsed-table $OUTPUT_DIR/collapsed-table.qza
+#     logger.info('Running taxa collapse')
+#     results['taxa_collapse'] = subprocess.run(['qiime', 'taxa', 'collapse',
+#                                                '--i-table', os.path.join(input_dir, 'table.qza'),
+#                                                '--i-taxonomy', os.path.join(input_dir, 'taxonomy.qza'),
+#                                                '--p-level', '6',
+#                                                '--o-collapsed-table', os.path.join(output_dir, 'collapsed-table.qza')])
+#     logger.debug('Taxa collapse output: {}'.format(results['taxa_collapse']))
+
+def relative_abundance_of_taxonomy( input_dir, output_dir):
+    results = {}
+
+    #     qiime taxa collapse \
+    #   --i-table feature-table.qza \
+    #   --i-taxonomy taxonomy.qza \
+    #   --p-level 2 \
+    #   --o-collapsed-table phyla-table.qza 
+    # Where feature-table.qza is from output of dada2/deblur and the taxonomy.qza file comes from the classifier I've linked above.
+    # Now we will convert this new frequency table to relative-frequency:
+
+    if not os.path.exists(os.path.join(input_dir, 'feature-table.qza')):
+        raise ValueError('Feature table not found in input directory')
+    if not os.path.exists(os.path.join(input_dir, 'taxonomy.qza')):
+        raise ValueError('Taxonomy file not found in input directory')
+    
+    if os.path.exists(os.path.join(output_dir, 'phyla-table.qza')):
+        logger.info('Phyla table already exists. Skipping')
+    else:
+        logger.info('Running taxa collapse')
+        results['taxa_collapse'] = subprocess.run(['qiime', 'taxa', 'collapse',
+                                                '--i-table', os.path.join(input_dir, 'feature-table.qza'),
+                                                '--i-taxonomy', os.path.join(input_dir, 'taxonomy.qza'),
+                                                '--p-level', '2',
+                                                '--o-collapsed-table', os.path.join(output_dir, 'phyla-table.qza')])
+        logger.debug('Taxa collapse output: {}'.format(results['taxa_collapse']))
+
+    link_output(os.path.join(output_dir, 'phyla-table.qza'), input_dir)    
+
+    # qiime feature-table relative-frequency \
+    # --i-table phyla-table.qza \
+    # --o-realtive-frequency-table rel-phyla-table.qza
+    # This new artifact now has the relative-abundances we want. To get this into a text file we first export the data which is in biom format:
+
+    if os.path.exists(os.path.join(output_dir, 'rel-phyla-table.qza')):
+        logger.info('Relative frequency table already exists. Skipping')
+    else:
+        results['relative_frequency'] = subprocess.run(['qiime', 'feature-table', 'relative-frequency',
+                                                        '--i-table', os.path.join(output_dir, 'phyla-table.qza'),
+                                                        '--o-relative-frequency-table', os.path.join(output_dir, 'rel-phyla-table.qza')])
+        logger.debug('Relative frequency output: {}'.format(results['relative_frequency']))
+
+    link_output(os.path.join(output_dir, 'rel-phyla-table.qza'), input_dir)
+
+    # qiime tools export rel-phyla-table.qza \
+    # --output-dir rel-table
+
+    if os.path.exists(os.path.join(output_dir, 'rel-table')):
+        logger.info('Relative table directory already exists. Skipping')
+    else:
+        results['export'] = subprocess.run(['qiime', 'tools', 'export', os.path.join(output_dir, 'rel-phyla-table.qza'),
+                                            '--output-dir', os.path.join(output_dir, 'rel-table')])
+        logger.debug('Export output: {}'.format(results['export']))
+
+    link_output(os.path.join(output_dir, 'rel-table'), input_dir)
+
+
+    # We now have our new relative-frequency table in .biom format. Let's convert this to a text file that we can open easily:
+
+    # # first move into the new directory
+    # cd rel-table
+    # # note that the table has been automatically labelled feature-table.biom
+    # # You might want to change this filename for calrity
+    # biom convert -i feature-table.biom -o rel-phyla-table.tsv --to-tsv
+
+    if not os.path.exists(os.path.join(output_dir, 'rel-table', 'feature-table.biom')):
+        logger.error('Feature table does not exists. Exiting')
+        return
+    
+    if os.path.exists(os.path.join(output_dir, 'rel-table', 'rel-phyla-table.tsv')):
+        logger.info('Relative phyla table already exists. Skipping')
+    else:
+        # os.chdir(os.path.join(output_dir, 'rel-table'))
+        # results['biom_convert'] = subprocess.run(['biom', 'convert', '-i', 'feature-table.biom',
+        #                                           '-o', 'rel-phyla-table.tsv', '--to-tsv'])
+        logger.debug('Biom convert output: {}'.format(results['biom_convert']))
+
+        results['biom_convert'] = subprocess.run(['biom', 'convert', 
+                                                  '-i', os.path.join( input_dir , "rel-table", 'feature-table.biom'),
+                                                  '-o', os.path.join( outputdir , "rel-table" ,'rel-phyla-table.tsv'), 
+                                                  '--to-tsv'])
+
+
+    link_output(os.path.join(output_dir, 'rel-table', 'rel-phyla-table.tsv'), input_dir)
+
+
+
+    
+
+
+def run_tool(name, args):
+    # Run a QIIME tool with the given arguments
+    # qiime <name> <args>
+    logger.info('Running tool {}'.format(name))
+    logger.debug('Arguments: {}'.format(args))
+    results = subprocess.run(['qiime', 'tool' , name] + args)
+    logger.debug('Results: {}'.format(results))
+
+
 
 def main():
     parser = argparse.ArgumentParser(description='QIIME Pipeline Script')
@@ -123,6 +804,12 @@ def main():
     stage_parser.add_argument('input_dir', type=str, help='Input directory')
     stage_parser.add_argument('output_dir', type=str, help='Output directory')
 
+    # Tool qiime subparser
+    tool_parser = subparsers.add_parser('tool', help='Run QIIME tool')
+    # collect all arguments in a list
+    tool_parser.add_argument('name', type=str, help='Name of the tool')
+    tool_parser.add_argument('args', nargs=argparse.REMAINDER  , default=["--help"] , help='Arguments for the tool')
+
     # Run qiime subparser
     run_parser = subparsers.add_parser('run', help='Run QIIME')
 
@@ -137,9 +824,45 @@ def main():
 
     # Demux subparser of run
     demux_parser.add_argument('input_dir', type=str, help='Input directory')
+    demux_parser.add_argument('--p-trunc-len-f', type=int, default=0, help="\
+                              Position at which forward read sequences should be \
+                          truncated due to decrease in quality. This truncates \
+                          the 3' end of the of the input sequences, which will \
+                          be the bases that were sequenced in the last cycles. \
+                          Reads that are shorter than this value will be \
+                          discarded. After this parameter is applied there \
+                          must still be at least a 12 nucleotide overlap \
+                          between the forward and reverse reads. If 0 is \
+                          provided, no truncation or length filtering will be \
+                          performed")
+    demux_parser.add_argument('--p-trunc-len-r', type=int, default=0, help="\
+                              Position at which reverse read sequences should be truncated due to decrease in quality. \
+                              This truncates the 3' end of the of the input sequences, which will be the bases that were \
+                              sequenced in the last cycles. Reads that are shorter than this value will be discarded. \
+                              After this parameter is applied there must still be at least a 12 nucleotide overlap between \
+                              the forward and reverse reads. If 0 is provided, no truncation or length filtering will be \
+                              performed")
 
     # Workflow subparser of run
     workflow_parser.add_argument('input_dir', type=str, help='Input directory')
+    workflow_parser.add_argument('--p-trunc-len-f', type=int, default=0, help="\
+                              Position at which forward read sequences should be \
+                          truncated due to decrease in quality. This truncates \
+                          the 3' end of the of the input sequences, which will \
+                          be the bases that were sequenced in the last cycles. \
+                          Reads that are shorter than this value will be \
+                          discarded. After this parameter is applied there \
+                          must still be at least a 12 nucleotide overlap \
+                          between the forward and reverse reads. If 0 is \
+                          provided, no truncation or length filtering will be \
+                          performed")
+    workflow_parser.add_argument('--p-trunc-len-r', type=int, default=0, help="\
+                              Position at which reverse read sequences should be truncated due to decrease in quality. \
+                              This truncates the 3' end of the of the input sequences, which will be the bases that were \
+                              sequenced in the last cycles. Reads that are shorter than this value will be discarded. \
+                              After this parameter is applied there must still be at least a 12 nucleotide overlap between \
+                              the forward and reverse reads. If 0 is provided, no truncation or length filtering will be \
+                              performed")
 
 
 
@@ -149,6 +872,20 @@ def main():
 
     if args.command == 'setup':
         stage_data(args.input_dir, args.output_dir)
+    elif args.command == 'run':
+        if args.subcommand == 'demux':
+            demux_data(args.input_dir, args.output_dir, args.p_trunc_len_f, args.p_trunc_len_r)
+        elif args.subcommand == 'denoise':
+            denoise_data(args.input_dir, args.output_dir)
+        elif args.subcommand == 'workflow':
+            run_workflow(args.input_dir, args.p_trunc_len_f, args.p_trunc_len_r)
+        else:
+            raise ValueError('Invalid subcommand')
+    elif args.command == 'tool':
+            run_tool(args.name, args.args)
+    else:
+        logger.error('Invalid command {}'.format(args.command))
+        # raise ValueError('Invalid command')
 
 if __name__ == '__main__':
     main()
