@@ -351,10 +351,9 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
                                             '--o-per-sample-sequences', demux_output,
                                             '--o-error-correction-details', demux_details_output])
     
-    link_output(demux_output_name, input_dir)
-    link_output(demux_details_output_name, input_dir)
+    link_output(demux_output, input_dir)
+    link_output(demux_details_output, input_dir)
 
-    sys.exit(0)
     # Run qiime demux summarize
     # qiime demux summarize \
     # --i-data $INPUT_DIR/demux-full.qza \
@@ -374,8 +373,9 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
                                                '--o-visualization', demux_viz_output])
         logger.debug('Demux visualization output: {}'.format(results['demux_viz']))
     
-    link_output(demux_viz_output_name, input_dir)
+    link_output(demux_viz_output, input_dir)
 
+    sys.exit(0)
 
 # Create a function which executes the qiime scripts from https://forum.qiime2.org/t/relative-abundances-of-taxonomy-analysis/4939/6
 # Start with the qiime taxa collapse script
@@ -480,9 +480,7 @@ def relative_abundance_of_taxonomy( input_dir, output_dir):
 
 
 
-
-
-def relative_abundance_of_taxa(input_dir, output_dir):
+    
 
 
 def run_tool(name, args):
@@ -519,7 +517,7 @@ def main():
     tool_parser = subparsers.add_parser('tool', help='Run QIIME tool')
     # collect all arguments in a list
     tool_parser.add_argument('name', type=str, help='Name of the tool')
-    tool_parser.add_argument('args', nargs=args.REMAINDER  , default=["--help"] , help='Arguments for the tool')
+    tool_parser.add_argument('args', nargs=argparse.REMAINDER  , default=["--help"] , help='Arguments for the tool')
 
     # Run qiime subparser
     run_parser = subparsers.add_parser('run', help='Run QIIME')
