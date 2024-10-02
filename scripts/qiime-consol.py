@@ -283,6 +283,166 @@ def link_output(source, target_dir):
         logger.debug('Creating symlink from {} to {}'.format(source, output_path))
         os.symlink(target , output_path )
 
+
+def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000):
+
+    # Run qiime diversity core-metrics-phylogenetic
+    # qiime diversity core-metrics-phylogenetic \
+    # --i-phylogeny $INPUT_DIR/rooted-tree.qza \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --p-sampling-depth 1100 \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --output-dir $OUTPUT_DIR/core-metrics-results
+
+    input_dir = os.path.join(base_dir, 'input')
+    output_dir = os.path.join(base_dir, 'output')
+
+    core_metrics_output_dir = os.path.join(output_dir, 'core-metrics-results')
+
+    # check if output directory already exists, skip if it does unless force is set to True
+    if os.path.exists(core_metrics_output_dir):
+        logger.info('Core metrics results directory already exists. Skipping')
+    else:
+        logger.info('Running core metrics')
+        logger.debug("Options: --i-phylogeny {} --i-table {} --p-sampling-depth {} --m-metadata-file {} --output-dir {}".format(os.path.join(input_dir, 'rooted-tree.qza'), os.path.join(input_dir, 'table-dada2.qza'), p_sampling_depth, os.path.join(input_dir, 'mapping.txt'), core_metrics_output_dir))
+        results['core_metrics'] = subprocess.run(['qiime', 'diversity', 'core-metrics-phylogenetic',
+                                                 '--i-phylogeny', os.path.join(input_dir, 'rooted-tree.qza'),
+                                                 '--i-table', os.path.join(input_dir, 'table-dada2.qza'),
+                                                 '--p-sampling-depth', str(p_sampling_depth),
+                                                 '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                 '--output-dir', core_metrics_output_dir])
+        logger.debug('Core metrics output: {}'.format(results['core_metrics']))
+
+    link_output(core_metrics_output_dir, input_dir)
+
+    # Run qiime diversity alpha-group-significance on faith_pd_vector
+    # qiime diversity alpha-group-significance \
+    # --i-alpha-diversity $OUTPUT_DIR/core-metrics-results/faith_pd_vector.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --o-visualization $OUTPUT_DIR/core-metrics-results/faith-pd-group-significance.qzv
+
+    alpha_group_significance_output_name = 'faith-pd-group-significance.qzv'
+    alpha_group_significance_output = os.path.join(core_metrics_output_dir, alpha_group_significance_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(alpha_group_significance_output):
+        logger.info('Alpha group significance output already exists. Skipping')
+    else:
+        logger.info('Running alpha group significance')
+        logger.debug("Options: --i-alpha-diversity {} --m-metadata-file {} --o-visualization {}".format(os.path.join(core_metrics_output_dir, 'faith_pd_vector.qza'), os.path.join(input_dir, 'mapping.txt'), alpha_group_significance_output))
+        results['alpha_group_significance'] = subprocess.run(['qiime', 'diversity', 'alpha-group-significance',
+                                                             '--i-alpha-diversity', os.path.join(core_metrics_output_dir, 'faith_pd_vector.qza'),
+                                                             '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                             '--o-visualization', alpha_group_significance_output])
+        logger.debug('Alpha group significance output: {}'.format(results['alpha_group_significance']))
+
+    link_output(alpha_group_significance_output, input_dir)
+
+
+    # Run qiime diversity alpha-group-significance on shannon_vector
+    # qiime diversity alpha-group-significance \
+    # --i-alpha-diversity $OUTPUT_DIR/core-metrics-results/shannon_vector.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --o-visualization $OUTPUT_DIR/core-metrics-results/shannon-group-significance.qzv
+
+    shannon_group_significance_output_name = 'shannon-group-significance.qzv'
+    shannon_group_significance_output = os.path.join(core_metrics_output_dir, shannon_group_significance_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(shannon_group_significance_output):
+        logger.info('Shannon group significance output already exists. Skipping')
+    else:
+        logger.info('Running shannon group significance')
+        logger.debug("Options: --i-alpha-diversity {} --m-metadata-file {} --o-visualization {}".format(os.path.join(core_metrics_output_dir, 'shannon_vector.qza'), os.path.join(input_dir, 'mapping.txt'), shannon_group_significance_output))
+        results['shannon_group_significance'] = subprocess.run(['qiime', 'diversity', 'alpha-group-significance',
+                                                               '--i-alpha-diversity', os.path.join(core_metrics_output_dir, 'shannon_vector.qza'),
+                                                               '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                               '--o-visualization', shannon_group_significance_output])
+        logger.debug('Shannon group significance output: {}'.format(results['shannon_group_significance']))
+
+    link_output(shannon_group_significance_output, input_dir)
+
+    # Run qiime diversity alpha-group-significance on evenness_vector
+    # qiime diversity alpha-group-significance \
+    # --i-alpha-diversity $OUTPUT_DIR/core-metrics-results/evenness_vector.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --o-visualization $OUTPUT_DIR/core-metrics-results/evenness-group-significance.qzv
+
+    evenness_group_significance_output_name = 'evenness-group-significance.qzv'
+    evenness_group_significance_output = os.path.join(core_metrics_output_dir, evenness_group_significance_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(evenness_group_significance_output):
+        logger.info('Evenness group significance output already exists. Skipping')
+    else:
+        logger.info('Running evenness group significance')
+        logger.debug("Options: --i-alpha-diversity {} --m-metadata-file {} --o-visualization {}".format(os.path.join(core_metrics_output_dir, 'evenness_vector.qza'), os.path.join(input_dir, 'mapping.txt'), evenness_group_significance_output))
+        results['evenness_group_significance'] = subprocess.run(['qiime', 'diversity', 'alpha-group-significance',
+                                                                '--i-alpha-diversity', os.path.join(core_metrics_output_dir, 'evenness_vector.qza'),
+                                                                '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                                '--o-visualization', evenness_group_significance_output])
+        logger.debug('Evenness group significance output: {}'.format(results['evenness_group_significance']))
+
+    link_output(evenness_group_significance_output, input_dir)
+    
+
+
+
+    # Run qiime diversity alpha-rarefaction
+    # qiime diversity alpha-rarefaction \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --i-phylogeny $INPUT_DIR/rooted-tree.qza \
+    # --p-max-depth 1100 \
+    # --p-steps 10 \
+    # --output-dir $OUTPUT_DIR/alpha-rarefaction-results
+
+    alpha_rarefaction_output_dir = os.path.join(output_dir, 'alpha-rarefaction-results')
+
+    # check if output directory already exists, skip if it does unless force is set to True
+    if os.path.exists(alpha_rarefaction_output_dir):
+        logger.info('Alpha rarefaction results directory already exists. Skipping')
+    else:
+        logger.info('Running alpha rarefaction')
+        logger.debug("Options: --i-table {} --i-phylogeny {} --p-max-depth {} --p-steps {} --output-dir {}".format(os.path.join(input_dir, 'table-dada2.qza'), os.path.join(input_dir, 'rooted-tree.qza'), p_max_depth, p_steps, alpha_rarefaction_output_dir))
+        results['alpha_rarefaction'] = subprocess.run(['qiime', 'diversity', 'alpha-rarefaction',
+                                                     '--i-table', os.path.join(input_dir, 'table-dada2.qza'),
+                                                     '--i-phylogeny', os.path.join(input_dir, 'rooted-tree.qza'),
+                                                     '--p-max-depth', str(p_max_depth),
+                                                     '--p-steps', str(p_steps),
+                                                     '--output-dir', alpha_rarefaction_output_dir])
+        logger.debug('Alpha rarefaction output: {}'.format(results['alpha_rarefaction']))
+
+    link_output(alpha_rarefaction_output_dir, input_dir)
+
+    # Run qiime diversity beta-group-significance
+    # qiime diversity beta-group-significance \
+    # --i-distance-matrix $OUTPUT_DIR/core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --m-metadata-column BodySite \
+    # --o-visualization $OUTPUT_DIR/core-metrics-results/unweighted-unifrac-body-site-significance.qzv \
+    # --p-pairwise
+
+    beta_group_significance_output_name = 'unweighted-unifrac-body-site-significance.qzv'
+    beta_group_significance_output = os.path.join(core_metrics_output_dir, beta_group_significance_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(beta_group_significance_output):
+        logger.info('Beta group significance output already exists. Skipping')
+    else:
+        logger.info('Running beta group significance')
+        logger.debug("Options: --i-distance-matrix {} --m-metadata-file {} --m-metadata-column BodySite --o-visualization {} --p-pairwise".format(os.path.join(core_metrics_output_dir, 'unweighted_unifrac_distance_matrix.qza'), os.path.join(input_dir, 'mapping.txt'), beta_group_significance_output))
+        results['beta_group_significance'] = subprocess.run(['qiime', 'diversity', 'beta-group-significance',
+                                                            '--i-distance-matrix', os.path.join(core_metrics_output_dir, 'unweighted_unifrac_distance_matrix.qza'),
+                                                            '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                            '--m-metadata-column', 'BodySite',
+                                                            '--o-visualization', beta_group_significance_output,
+                                                            '--p-pairwise'])
+        logger.debug('Beta group significance output: {}'.format(results['beta_group_significance']))
+
+    link_output(beta_group_significance_output, input_dir)
+
+    # Run qiime diversity pcoa
+
 def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000):
     # Create output directory and raw data directory
   
