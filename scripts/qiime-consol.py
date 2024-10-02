@@ -375,7 +375,65 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0):
     
     link_output(demux_viz_output, input_dir)
 
-    sys.exit(0)
+    # Export the demux visualization
+    # qiime tools export \
+    # --input-path $OUTPUT_DIR/demux-full.qzv \
+    # --output-path $OUTPUT_DIR/demux-full
+
+    demux_viz_export_dir = os.path.join(output_dir, 'demux-full')
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(demux_viz_export_dir):
+        logger.info('Demux visualization export directory already exists. Skipping')
+    else:
+        logger.info('Exporting demux visualization')
+        logger.debug("Options: --input-path {} --output-path {}".format(demux_viz_output, demux_viz_export_dir))
+        results['demux_viz_export'] = subprocess.run(['qiime', 'tools', 'export',
+                                                      '--input-path', demux_viz_output,
+                                                      '--output-path', demux_viz_export_dir])
+        logger.debug('Demux visualization export output: {}'.format(results['demux_viz_export']))
+
+    link_output(demux_viz_export_dir, input_dir)
+
+    # Run qiime dada2 denoise-paired
+    # qiime dada2 denoise-paired \
+    # --i-demultiplexed-seqs $INPUT_DIR/demux-full.qza \
+    # --p-trim-left-f 0 \
+    # --p-trim-left-r 0 \
+    # --p-trunc-len-f 150 \
+    # --p-trunc-len-r 150 \
+    # --o-representative-sequences $OUTPUT_DIR/rep-seqs-dada2.qza \
+    # --o-table $OUTPUT_DIR/table-dada2.qza \
+    # --o-denoising-stats $OUTPUT_DIR/stats-dada2.qza
+
+    denoise_output_name = 'rep-seqs-dada2.qza'
+    table_output_name = 'table-dada2.qza'
+    stats_output_name = 'stats-dada2.qza'
+    denoise_output = os.path.join(output_dir, denoise_output_name)
+    table_output = os.path.join(output_dir, table_output_name)
+    stats_output = os.path.join(output_dir, stats_output_name)
+
+    # check if outputs already exist, skip if they do unless force is set to True
+    if os.path.exists(denoise_output) and os.path.exists(table_output) and os.path.exists(stats_output):
+        logger.info('Denoise outputs already exist. Skipping')
+    else:
+        logger.info('Running dada2 denoise paired')
+        logger.debug("Options: --i-demultiplexed-seqs {} --p-trim-left-f 0 --p-trim-left-r 0 --p-trunc-len-f {} --p-trunc-len-r {} --o-representative-sequences {} --o-table {} --o-denoising-stats {}".format(demux_output, p_trunc_len_f, p_trunc_len_r, denoise_output, table_output, stats_output))
+        results['denoise'] = subprocess.run(['qiime', 'dada2', 'denoise-paired',
+                                            '--i-demultiplexed-seqs', demux_output,
+                                            '--p-trim-left-f', '0',
+                                            '--p-trim-left-r', '0',
+                                            '--p-trunc-len-f', str(p_trunc_len_f),
+                                            '--p-trunc-len-r', str(p_trunc_len_r),
+                                            '--o-representative-sequences', denoise_output,
+                                            '--o-table', table_output,
+                                            '--o-denoising-stats', stats_output])
+        logger.debug('Denoise output: {}'.format(results['denoise']))
+
+    link_output(denoise_output, input_dir)
+    link_output(table_output, input_dir)
+    link_output(stats_output, input_dir)
+    
 
 # Create a function which executes the qiime scripts from https://forum.qiime2.org/t/relative-abundances-of-taxonomy-analysis/4939/6
 # Start with the qiime taxa collapse script
