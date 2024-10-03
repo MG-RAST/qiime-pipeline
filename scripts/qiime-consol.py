@@ -138,6 +138,9 @@ def setup_directories(output_dir):
     os.makedirs(local_output_dir, exist_ok=True)
     os.makedirs(local_raw_data_dir, exist_ok=True)
 
+
+
+
     return local_input_dir, local_output_dir, local_raw_data_dir
 
 def proveance_file(output_dir, name, message):
@@ -150,6 +153,17 @@ def stage_data(input_dir, output_dir , force = False):
     # os.makedirs(raw_data_dir, exist_ok=True)
 
     [ output_dir , not_used_for_staging , raw_data_dir ] = setup_directories(output_dir)
+
+    # Get classifier from https://data.qiime2.org/classifiers/sklearn-1.4.2/greengenes/gg-13-8-99-515-806-nb-classifier.qza and store it in the input directory
+    classifier_url = 'https://data.qiime2.org/classifiers/sklearn-1.4.2/greengenes/gg-13-8-99-515-806-nb-classifier.qza'
+    classifier_output = os.path.join(output_dir, 'gg-13-8-99-515-806-nb-classifier.qza')
+    if os.path.exists(classifier_output):
+        logger.info('Classifier already exists in input directory. Skipping')
+    else:
+        logger.info('Downloading classifier')
+        logger.debug("Options: {} -O {}".format(classifier_url, classifier_output))
+        results['classifier'] = subprocess.run(['wget', classifier_url, '-O', classifier_output])
+        logger.debug('Classifier output: {}'.format(results['classifier']))
 
     # Search for files starting with 'Undetermined' and having .fastq or .fastq.gz suffix
     search_patterns = ['**/Undetermined*.fastq', '**/Undetermined*.fastq.gz' , 'Undetermined*.fq' , 'Undetermined*.fq.gz']
@@ -272,7 +286,7 @@ def link_output(source, target_dir):
     # Create symlink from output_name to input_dir/filename
     
     if not os.path.exists(source):
-        raise ValueError('Source file does not exist')
+        raise ValueError(f"Source file does not exist: {source}")
     
     filename = os.path.basename(source)
     target = os.path.join( "../output" , filename)
@@ -286,7 +300,7 @@ def link_output(source, target_dir):
         os.symlink(target , output_path )
 
 
-def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000):
+def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 500 , results = {}):
 
     # Run qiime diversity core-metrics-phylogenetic
     # qiime diversity core-metrics-phylogenetic \
@@ -337,6 +351,15 @@ def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 10000, p_sa
                                                              '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
                                                              '--o-visualization', alpha_group_significance_output])
         logger.debug('Alpha group significance output: {}'.format(results['alpha_group_significance']))
+
+
+    logger.debug('Alpha group significance output: {}'.format(results['alpha_group_significance']))
+
+    if results['alpha_group_significance'].returncode != 0:
+        logger.error('Error running alpha group significance')
+        logger.error(results['alpha_group_significance'])
+        logger.info('Exiting alpha diveristy analysis')
+        return
 
     link_output(alpha_group_significance_output, input_dir)
 
@@ -444,6 +467,127 @@ def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 10000, p_sa
     link_output(beta_group_significance_output, input_dir)
 
     # Run qiime diversity pcoa
+
+
+def run_phylogeny_analysis(base_dir, results = {}):
+
+    input_dir = os.path.join(base_dir, 'input')
+    output_dir = os.path.join(base_dir, 'output')
+
+    # Run qiime phylogeny align-to-tree-mafft-fasttree
+
+    # qiime phylogeny align-to-tree-mafft-fasttree \
+    # --i-sequences $INPUT_DIR/rep-seqs-dada2.qza \
+    # --o-alignment $OUTPUT_DIR/aligned-rep-seqs.qza \
+    # --o-masked-alignment $OUTPUT_DIR/masked-aligned-rep-seqs.qza \
+    # --o-tree $OUTPUT_DIR/unrooted-tree.qza \
+    # --o-rooted-tree $OUTPUT_DIR/rooted-tree.qza
+
+    aligned_output_name = 'aligned-rep-seqs.qza'
+    masked_aligned_output_name = 'masked-aligned-rep-seqs.qza'
+    unrooted_tree_output_name = 'unrooted-tree.qza'
+    rooted_tree_output_name = 'rooted-tree.qza'
+    
+    aligned_output = os.path.join(output_dir, aligned_output_name)
+    masked_aligned_output = os.path.join(output_dir, masked_aligned_output_name)
+    unrooted_tree_output = os.path.join(output_dir, unrooted_tree_output_name)
+    rooted_tree_output = os.path.join(output_dir, rooted_tree_output_name)
+
+    # check if outputs already exist, skip if they do unless force is set to True
+    if os.path.exists(aligned_output) and os.path.exists(masked_aligned_output) and os.path.exists(unrooted_tree_output) and os.path.exists(rooted_tree_output):
+        logger.info('Phylogeny outputs already exist. Skipping')
+    else:
+        logger.info('Running phylogeny')
+        logger.debug("Options: --i-sequences {} --o-alignment {} --o-masked-alignment {} --o-tree {} --o-rooted-tree {}".format(os.path.join(input_dir, 'rep-seqs-dada2.qza'), aligned_output, masked_aligned_output, unrooted_tree_output, rooted_tree_output))
+        results['phylogeny'] = subprocess.run(['qiime', 'phylogeny', 'align-to-tree-mafft-fasttree',
+                                             '--i-sequences', os.path.join(input_dir, 'rep-seqs-dada2.qza'),
+                                             '--o-alignment', aligned_output,
+                                             '--o-masked-alignment', masked_aligned_output,
+                                             '--o-tree', unrooted_tree_output,
+                                             '--o-rooted-tree', rooted_tree_output])
+        logger.debug('Phylogeny output: {}'.format(results['phylogeny']))
+
+    link_output(aligned_output, input_dir)
+    link_output(masked_aligned_output, input_dir)
+    link_output(unrooted_tree_output, input_dir)
+    link_output(rooted_tree_output, input_dir)
+
+    # Run qiime diversity alpha-rarefaction
+
+    # qiime diversity alpha-rarefaction \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --i-phylogeny $OUTPUT_DIR/rooted-tree.qza \
+    # --p-max-depth 1100 \
+    # --p-steps 10 \
+    # --output-dir $OUTPUT_DIR/alpha-rarefaction-results
+
+    alpha_rarefaction_output_dir = os.path.join(output_dir, 'alpha-rarefaction-results')
+
+    # check if output directory already exists, skip if it does unless force is set to True
+    if os.path.exists(alpha_rarefaction_output_dir):
+        logger.info('Alpha rarefaction results directory already exists. Skipping')
+    else:
+        logger.info('Running alpha rarefaction')
+        logger.debug("Options: --i-table {} --i-phylogeny {} --p-max-depth 1100 --p-steps 10 --output-dir {}".format(os.path.join(input_dir, 'table-dada2.qza'), rooted_tree_output, alpha_rarefaction_output_dir))
+        results['alpha_rarefaction'] = subprocess.run(['qiime', 'diversity', 'alpha-rarefaction',
+                                                     '--i-table', os.path.join(input_dir, 'table-dada2.qza'),
+                                                     '--i-phylogeny', rooted_tree_output,
+                                                     '--p-max-depth', '1100',
+                                                     '--p-steps', '10',
+                                                     '--output-dir', alpha_rarefaction_output_dir])
+        logger.debug('Alpha rarefaction output: {}'.format(results['alpha_rarefaction']))
+
+    link_output(alpha_rarefaction_output_dir, input_dir)
+
+
+    # Run qiime feature-table tabulate-seqs
+
+    # qiime feature-table tabulate-seqs \
+    # --i-data $INPUT_DIR/rep-seqs-dada2.qza \
+    # --o-visualization $OUTPUT_DIR/rep-seqs.qzv
+
+    rep_seqs_output_name = 'rep-seqs.qzv'
+    rep_seqs_output = os.path.join(output_dir, rep_seqs_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(rep_seqs_output):
+        logger.info('Rep seqs output already exists. Skipping')
+    else:
+        logger.info('Running rep seqs')
+        logger.debug("Options: --i-data {} --o-visualization {}".format(os.path.join(input_dir, 'rep-seqs-dada2.qza'), rep_seqs_output))
+        results['rep_seqs'] = subprocess.run(['qiime', 'feature-table', 'tabulate-seqs',
+                                            '--i-data', os.path.join(input_dir, 'rep-seqs-dada2.qza'),
+                                            '--o-visualization', rep_seqs_output])
+        logger.debug('Rep seqs output: {}'.format(results['rep_seqs']))
+
+    link_output(rep_seqs_output, input_dir)
+
+    # Run qiime feature-classifier classify-sklearn
+
+    # qiime feature-classifier classify-sklearn \
+    # --i-classifier $INPUT_DIR/gg-13-8-99-515-806-nb-classifier.qza \
+    # --i-reads $INPUT_DIR/rep-seqs-dada2.qza \
+    # --o-classification $OUTPUT_DIR/taxonomy.qza
+
+    taxonomy_output_name = 'taxonomy.qza'
+    taxonomy_output = os.path.join(output_dir, taxonomy_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(taxonomy_output):
+        logger.info('Taxonomy output already exists. Skipping')
+    else:
+        logger.info('Running taxonomy')
+        logger.debug("Options: --i-classifier {} --i-reads {} --o-classification {}".format(os.path.join(input_dir, 'gg-13-8-99-515-806-nb-classifier.qza'), os.path.join(input_dir, 'rep-seqs-dada2.qza'), taxonomy_output))
+        results['taxonomy'] = subprocess.run(['qiime', 'feature-classifier', 'classify-sklearn',
+                                            '--i-classifier', os.path.join(input_dir, 'gg-13-8-99-515-806-nb-classifier.qza'),
+                                            '--i-reads', os.path.join(input_dir, 'rep-seqs-dada2.qza'),
+                                            '--o-classification', taxonomy_output])
+        logger.debug('Taxonomy output: {}'.format(results['taxonomy']))
+
+    link_output(taxonomy_output, input_dir)
+
+
+
 
 def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000):
     # Create output directory and raw data directory
@@ -662,8 +806,11 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     link_output(stats_viz_output, input_dir)
 
 
+    run_phylogeny_analysis(base_dir)
+    run_diversity_analysis(base_dir, p_max_depth, p_steps, p_sampling_depth)
 
 
+    logger.info('Workflow complete')
     # Run qiime metadata tabulate
 
 
