@@ -162,7 +162,7 @@ def stage_data(input_dir, output_dir , force = False):
     else:
         logger.info('Downloading classifier')
         logger.debug("Options: {} -O {}".format(classifier_url, classifier_output))
-        results['classifier'] = subprocess.run(['wget', classifier_url, '-O', classifier_output])
+        results = subprocess.run(['wget', classifier_url, '-O', classifier_output])
         logger.debug('Classifier output: {}'.format(results['classifier']))
 
     # Search for files starting with 'Undetermined' and having .fastq or .fastq.gz suffix
