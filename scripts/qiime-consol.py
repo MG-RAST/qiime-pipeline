@@ -715,13 +715,15 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
         # qiime tools export rel-phyla-table.qza \
         # --output-dir rel-table
 
+
+        phyla_table_dir = os.path.join(output_dir, 'rel-phyla-table-level-{}'.format(level))
        
         results['export'] = subprocess.run(['qiime', 'tools', 'export', 
                                             '--input-path', os.path.join(output_dir, rel_phyla_table),
-                                            '--output-path', os.path.join(output_dir, 'rel-table')])
+                                            '--output-path', os.path.join(output_dir, phyla_table_dir )])
         logger.debug('Export output: {}'.format(results['export']))
 
-        link_output(os.path.join(output_dir, 'rel-table'), input_dir)
+        link_output(os.path.join(output_dir, phyla_table_dir), input_dir)
 
 
         # We now have our new relative-frequency table in .biom format. Let's convert this to a text file that we can open easily:
