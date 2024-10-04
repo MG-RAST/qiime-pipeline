@@ -595,6 +595,65 @@ def run_phylogeny_analysis(base_dir, results = {}):
 
     link_output(taxonomy_output, input_dir)
 
+    # Run qiime metadata tabulate
+
+    # qiime metadata tabulate \
+    # --m-input-file $OUTPUT_DIR/taxonomy.qza \
+    # --o-visualization $OUTPUT_DIR/taxonomy.qzv
+
+    taxonomy_viz_output_name = 'taxonomy.qzv'
+    taxonomy_viz_output = os.path.join(output_dir, taxonomy_viz_output_name)
+
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(taxonomy_viz_output):
+        logger.info('Taxonomy viz output already exists. Skipping')
+    else:
+        logger.info('Running taxonomy viz')
+        logger.debug("Options: --m-input-file {} --o-visualization {}".format(taxonomy_output, taxonomy_viz_output))
+        results['taxonomy_viz'] = subprocess.run(['qiime', 'metadata', 'tabulate',
+                                                '--m-input-file', taxonomy_output,
+                                                '--o-visualization', taxonomy_viz_output])
+        logger.debug('Taxonomy viz output: {}'.format(results['taxonomy_viz']))
+
+    link_output(taxonomy_viz_output, input_dir)
+
+    # Run qiime taxa barplot
+    
+    # qiime taxa barplot \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --i-taxonomy $OUTPUT_DIR/taxonomy.qza \
+    # --m-metadata-file $INPUT_DIR/mapping.txt \
+    # --o-visualization $OUTPUT_DIR/taxa-bar-plots.qzv
+
+    taxa_barplot_output_name = 'taxa-bar-plots.qzv'
+    taxa_barplot_output = os.path.join(output_dir, taxa_barplot_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(taxa_barplot_output):
+        logger.info('Taxa barplot output already exists. Skipping')
+    else:
+        logger.info('Running taxa barplot')
+        logger.debug("Options: --i-table {} --i-taxonomy {} --m-metadata-file {} --o-visualization {}".format(os.path.join(input_dir, 'table-dada2.qza'), taxonomy_output, os.path.join(input_dir, 'mapping.txt'), taxa_barplot_output))
+        results['taxa_barplot'] = subprocess.run(['qiime', 'taxa', 'barplot',
+                                                '--i-table', os.path.join(input_dir, 'table-dada2.qza'),
+                                                '--i-taxonomy', taxonomy_output,
+                                                '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                '--o-visualization', taxa_barplot_output])
+        logger.debug('Taxa barplot output: {}'.format(results['taxa_barplot']))
+
+    link_output(taxa_barplot_output, input_dir)
+
+    # Run qiime feature-table summarize
+
+    # qiime feature-table summarize \
+    # --i-table $INPUT_DIR/table-dada2.qza \
+    # --o-visualization $OUTPUT_DIR/table.qzv \
+    # --m-sample-metadata-file $INPUT_DIR/mapping.txt
+
+    
+
+
 
 def run_relative_abundance_of_taxonomy( base_dir , results = {}):
     results = {}
@@ -1139,6 +1198,7 @@ def main():
     else:
         logger.error('Invalid command {}'.format(args.command))
         # raise ValueError('Invalid command')
+
 
 if __name__ == '__main__':
     main()
