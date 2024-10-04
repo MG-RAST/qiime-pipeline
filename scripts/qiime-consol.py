@@ -734,11 +734,11 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
         # # You might want to change this filename for calrity
         # biom convert -i feature-table.biom -o rel-phyla-table.tsv --to-tsv
 
-        if not os.path.exists(os.path.join(output_dir, 'rel-table', 'feature-table.biom')):
+        if not os.path.exists(os.path.join(output_dir, phyla_table_dir, f'feature-table.biom')):
             logger.error('Feature table does not exists. Exiting')
             return
         
-        if os.path.exists(os.path.join(output_dir, 'rel-table', 'rel-phyla-table.tsv')):
+        if os.path.exists(os.path.join(output_dir, phyla_table_dir, f'rel-phyla-table.{level}.tsv')):
             logger.info('Relative phyla table already exists. Skipping')
         else:
             # os.chdir(os.path.join(output_dir, 'rel-table'))
@@ -747,8 +747,8 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
         
 
             results['biom_convert'] = subprocess.run(['biom', 'convert', 
-                                                    '-i', os.path.join( input_dir , "rel-table", 'feature-table.biom'),
-                                                    '-o', os.path.join( output_dir , "rel-table" ,'rel-phyla-table.tsv'), 
+                                                    '-i', os.path.join( input_dir , phyla_table_dir, 'feature-table.biom'),
+                                                    '-o', os.path.join( output_dir , phyla_table_dir ,f'rel-phyla-table.{level}.tsv'), 
                                                     '--to-tsv'])
             
             logger.debug('Biom convert output: {}'.format(results['biom_convert']))
