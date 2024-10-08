@@ -154,6 +154,8 @@ def stage_data(input_dir, output_dir , force = False):
 
     [ output_dir , not_used_for_staging , raw_data_dir ] = setup_directories(output_dir)
 
+    results = {}
+
     # Get classifier from https://data.qiime2.org/classifiers/sklearn-1.4.2/greengenes/gg-13-8-99-515-806-nb-classifier.qza and store it in the input directory
     classifier_url = 'https://data.qiime2.org/classifiers/sklearn-1.4.2/greengenes/gg-13-8-99-515-806-nb-classifier.qza'
     classifier_output = os.path.join(output_dir, 'gg-13-8-99-515-806-nb-classifier.qza')
@@ -162,7 +164,7 @@ def stage_data(input_dir, output_dir , force = False):
     else:
         logger.info('Downloading classifier')
         logger.debug("Options: {} -O {}".format(classifier_url, classifier_output))
-        results = subprocess.run(['wget', classifier_url, '-O', classifier_output])
+        results['classifier'] = subprocess.run(['wget', classifier_url, '-O', classifier_output])
         logger.debug('Classifier output: {}'.format(results['classifier']))
 
     # Search for files starting with 'Undetermined' and having .fastq or .fastq.gz suffix
@@ -756,7 +758,7 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
         link_output(os.path.join(output_dir, 'rel-table', 'rel-phyla-table.tsv'), input_dir)
 
 
-def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000, beta_group_significance_column=None):  
+def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000, beta_group_significance_column=None , barcode_column_name='BarcodeSequence', group_by=None, force=False):  
     # Create output directory and raw data directory
   
     # check if the input directory exists
@@ -1184,7 +1186,7 @@ def main():
     workflow_parser.add_argument('--p-steps', type=int, default=10000, help="Steps for alpha rarefaction")
     workflow_parser.add_argument('--p-sampling-depth', type=int, default=10000, help="Sampling depth for alpha rarefaction")
     workflow_parser.add_argument('--beta-diversity-group-by', type=str, default=None, help="Meta data column to group by for beta diversity analysis")
-
+    workflow_parser.add_argument('--barcode_column_name', default="barcode-sequence", help='Barcode column name in the mapping file')    
 
 
 
@@ -1200,7 +1202,7 @@ def main():
         elif args.subcommand == 'denoise':
             denoise_data(args.input_dir, args.output_dir)
         elif args.subcommand == 'workflow':
-            run_workflow(args.input_dir, args.p_trunc_len_f, args.p_trunc_len_r , args.p_max_depth, args.p_steps, args.p_sampling_depth , args.beta_diversity_group_by)
+            run_workflow(args.input_dir, args.p_trunc_len_f, args.p_trunc_len_r , args.p_max_depth, args.p_steps, args.p_sampling_depth , args.beta_diversity_group_by , barcode_column_name=args.barcode_column_name)
         else:
             raise ValueError('Invalid subcommand')
     elif args.command == 'tool':
