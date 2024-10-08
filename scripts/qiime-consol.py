@@ -691,7 +691,7 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
             results['taxa_collapse'] = subprocess.run(['qiime', 'taxa', 'collapse',
                                                     '--i-table', os.path.join(input_dir, 'table-dada2.qza'),
                                                     '--i-taxonomy', os.path.join(input_dir, 'taxonomy.qza'),
-                                                    '--p-level', '2',
+                                                    '--p-level', level,
                                                     '--o-collapsed-table', os.path.join(output_dir, phyla_table_output_name )])
             logger.debug('Taxa collapse output: {}'.format(results['taxa_collapse']))
 
