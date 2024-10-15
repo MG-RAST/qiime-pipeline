@@ -480,7 +480,15 @@ def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 10000, p_sa
     # Run qiime diversity pcoa
 
 
-def run_phylogeny_analysis(base_dir, results = {}):
+def run_phylogeny_analysis(base_dir, p_max_depth=None , p_steps=None,  results = {}):
+
+
+    if not p_max_depth:
+        logger.error('Max depth not specified')
+        return
+    if not p_steps:
+        logger.error('Steps not specified')
+        return
 
     input_dir = os.path.join(base_dir, 'input')
     output_dir = os.path.join(base_dir, 'output')
@@ -543,9 +551,10 @@ def run_phylogeny_analysis(base_dir, results = {}):
         results['alpha_rarefaction'] = subprocess.run(['qiime', 'diversity', 'alpha-rarefaction',
                                                      '--i-table', os.path.join(input_dir, 'table-dada2.qza'),
                                                      '--i-phylogeny', rooted_tree_output,
-                                                     '--p-max-depth', '1100',
-                                                     '--p-steps', '10',
+                                                     '--p-max-depth',  str(p_max_depth),
+                                                     '--p-steps', str(p_steps),
                                                      '--output-dir', alpha_rarefaction_output_dir])
+        
         logger.debug('Alpha rarefaction output: {}'.format(results['alpha_rarefaction']))
 
     link_output(alpha_rarefaction_output_dir, input_dir)
@@ -975,7 +984,7 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     link_output(stats_viz_output, input_dir)
 
 
-    run_phylogeny_analysis(base_dir)
+    run_phylogeny_analysis(base_dir , p_sampling_depth , p_steps)
     run_diversity_analysis(base_dir, p_max_depth, p_steps, p_sampling_depth , group_by=beta_group_significance_column)
     run_relative_abundance_of_taxonomy(base_dir)
 
