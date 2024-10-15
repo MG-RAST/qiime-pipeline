@@ -308,7 +308,7 @@ def link_output(source, target_dir):
         os.symlink(target , output_path )
 
 
-def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 500 , group_by=None, results = {}):
+def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 100, p_sampling_depth = 500 , group_by=None, results = {}):
 
     # Run qiime diversity core-metrics-phylogenetic
     # qiime diversity core-metrics-phylogenetic \
@@ -984,7 +984,7 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     link_output(stats_viz_output, input_dir)
 
 
-    run_phylogeny_analysis(base_dir , p_sampling_depth , p_steps)
+    run_phylogeny_analysis(base_dir, p_max_depth, p_steps)
     run_diversity_analysis(base_dir, p_max_depth, p_steps, p_sampling_depth , group_by=beta_group_significance_column)
     run_relative_abundance_of_taxonomy(base_dir)
 
@@ -1113,7 +1113,10 @@ def run_tool(name, args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='QIIME Pipeline Script')
+    parser = argparse.ArgumentParser(
+        description='QIIME Pipeline Script',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
 
     parser.add_argument('--log_level', default=logging.INFO , 
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], 
@@ -1147,7 +1150,11 @@ def main():
 
     demux_parser = run_subparsers.add_parser('demux', help='Demultiplex data')
     denoise_parser = run_subparsers.add_parser('denoise', help='Denoise data')
-    workflow_parser = run_subparsers.add_parser('workflow' , help='Run QIIME workflow')
+    workflow_parser = run_subparsers.add_parser(
+        'workflow' , 
+        help='Run QIIME workflow' , 
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
 
 
     # Demux subparser of run
@@ -1173,7 +1180,7 @@ def main():
 
     # Workflow subparser of run
     workflow_parser.add_argument('input_dir', type=str, help='Input directory')
-    workflow_parser.add_argument('--p-trunc-len-f', type=int, default=0, help="\
+    workflow_parser.add_argument('--p-trunc-len-f', dest="p_trunc_len_f" ,type=int, default=0, help="\
                               Position at which forward read sequences should be \
                           truncated due to decrease in quality. This truncates \
                           the 3' end of the of the input sequences, which will \
@@ -1184,18 +1191,18 @@ def main():
                           between the forward and reverse reads. If 0 is \
                           provided, no truncation or length filtering will be \
                           performed")
-    workflow_parser.add_argument('--p-trunc-len-r', type=int, default=0, help="\
+    workflow_parser.add_argument('--p-trunc-len-r', dest="p_trunc_len_r", type=int, default=0, help="\
                               Position at which reverse read sequences should be truncated due to decrease in quality. \
                               This truncates the 3' end of the of the input sequences, which will be the bases that were \
                               sequenced in the last cycles. Reads that are shorter than this value will be discarded. \
                               After this parameter is applied there must still be at least a 12 nucleotide overlap between \
                               the forward and reverse reads. If 0 is provided, no truncation or length filtering will be \
                               performed")
-    workflow_parser.add_argument('--p-max-depth', type=int, default=10000, help="Maximum depth for alpha rarefaction")
-    workflow_parser.add_argument('--p-steps', type=int, default=10000, help="Steps for alpha rarefaction")
-    workflow_parser.add_argument('--p-sampling-depth', type=int, default=10000, help="Sampling depth for alpha rarefaction")
-    workflow_parser.add_argument('--beta-diversity-group-by', type=str, default=None, help="Meta data column to group by for beta diversity analysis")
-    workflow_parser.add_argument('--barcode_column_name', default="barcode-sequence", help='Barcode column name in the mapping file')    
+    workflow_parser.add_argument('--p-max-depth', dest="p_max_depth", type=int, default=10000, help="Maximum depth for alpha-rarefaction")
+    workflow_parser.add_argument('--p-steps', dest="p_steps", type=int, default=10, help="Steps for alpha rarefaction")
+    workflow_parser.add_argument('--p-sampling-depth', dest="p_sampling_depth", type=int, default=20000, help="Sampling depth for core-metrics-phylogenetic")
+    workflow_parser.add_argument('--beta-diversity-group-by', dest="beta_diversity_group_by", type=str, default=None, help="Meta data column to group by for beta diversity analysis")
+    workflow_parser.add_argument('--barcode-column-name', dest="barcode_column_name", default="barcode-sequence", help='Barcode column name in the mapping file')    
 
 
 
