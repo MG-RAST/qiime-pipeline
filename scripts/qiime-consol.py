@@ -764,7 +764,7 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
             
             logger.debug('Biom convert output: {}'.format(results['biom_convert']))
 
-        link_output(os.path.join(output_dir, phyla_table_dir, f'rel-phyla-table.{level}.tsv', input_dir))
+        link_output(os.path.join(output_dir, phyla_table_dir, f'rel-phyla-table.{level}.tsv'), input_dir)
 
 
 def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000, beta_group_significance_column=None , barcode_column_name='BarcodeSequence', group_by=None, force=False):  
