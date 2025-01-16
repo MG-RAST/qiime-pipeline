@@ -1,0 +1,41 @@
+wget https://data.qiime2.org/classifiers/sklearn-1.4.2/greengenes/gg-13-8-99-515-806-nb-classifier.qza -O /path/to/output/gg-13-8-99-515-806-nb-classifier.qza
+
+qiime diversity core-metrics-phylogenetic --i-phylogeny /path/to/input/rooted-tree.qza --i-table /path/to/input/table-dada2.qza --p-sampling-depth 500 --m-metadata-file /path/to/input/mapping.txt --output-dir /path/to/output/core-metrics-results
+
+qiime diversity alpha-group-significance --i-alpha-diversity /path/to/output/core-metrics-results/faith_pd_vector.qza --m-metadata-file /path/to/input/mapping.txt --o-visualization /path/to/output/core-metrics-results/faith-pd-group-significance.qzv
+
+qiime diversity alpha-group-significance --i-alpha-diversity /path/to/output/core-metrics-results/shannon_vector.qza --m-metadata-file /path/to/input/mapping.txt --o-visualization /path/to/output/core-metrics-results/shannon-group-significance.qzv
+
+qiime diversity alpha-group-significance --i-alpha-diversity /path/to/output/core-metrics-results/evenness_vector.qza --m-metadata-file /path/to/input/mapping.txt --o-visualization /path/to/output/core-metrics-results/evenness-group-significance.qzv
+
+qiime diversity alpha-rarefaction --i-table /path/to/input/table-dada2.qza --i-phylogeny /path/to/input/rooted-tree.qza --p-max-depth 10000 --p-steps 100 --output-dir /path/to/output/alpha-rarefaction-results
+
+qiime diversity beta-group-significance --i-distance-matrix /path/to/output/core-metrics-results/unweighted_unifrac_distance_matrix.qza --m-metadata-file /path/to/input/mapping.txt --m-metadata-column BodySite --o-visualization /path/to/output/core-metrics-results/unweighted-unifrac-body-site-significance.qzv --p-pairwise
+
+qiime phylogeny align-to-tree-mafft-fasttree --i-sequences /path/to/input/rep-seqs-dada2.qza --o-alignment /path/to/output/aligned-rep-seqs.qza --o-masked-alignment /path/to/output/masked-aligned-rep-seqs.qza --o-tree /path/to/output/unrooted-tree.qza --o-rooted-tree /path/to/output/rooted-tree.qza
+
+qiime feature-table tabulate-seqs --i-data /path/to/input/rep-seqs-dada2.qza --o-visualization /path/to/output/rep-seqs.qzv
+
+qiime feature-classifier classify-sklearn --i-classifier /path/to/input/gg-13-8-99-515-806-nb-classifier.qza --i-reads /path/to/input/rep-seqs-dada2.qza --o-classification /path/to/output/taxonomy.qza
+
+qiime metadata tabulate --m-input-file /path/to/output/taxonomy.qza --o-visualization /path/to/output/taxonomy.qzv
+
+qiime taxa barplot --i-table /path/to/input/table-dada2.qza --i-taxonomy /path/to/output/taxonomy.qza --m-metadata-file /path/to/input/mapping.txt --o-visualization /path/to/output/taxa-bar-plots.qzv
+
+qiime feature-table summarize --i-table /path/to/input/table-dada2.qza --o-visualization /path/to/output/table.qzv --m-sample-metadata-file /path/to/input/mapping.txt
+
+qiime tools import --type EMPPairedEndSequences --input-path /path/to/input/raw_data --output-path /path/to/output/paired-end-sequences.qza
+
+qiime demux emp-paired --m-barcodes-file /path/to/barcodes/file --m-barcodes-column barcode-sequence --p-rev-comp-mapping-barcodes --p-rev-comp-barcodes --i-seqs /path/to/input/paired-end-sequences.qza --o-per-sample-sequences /path/to/output/demux-full.qza --o-error-correction-details /path/to/output/demux-details.qza
+
+qiime demux summarize --i-data /path/to/output/demux-full.qza --o-visualization /path/to/output/demux-full.qzv
+
+qiime tools export --input-path /path/to/output/demux-full.qzv --output-path /path/to/output/demux-full
+
+qiime dada2 denoise-paired --i-demultiplexed-seqs /path/to/output/demux-full.qza --p-trim-left-f 0 --p-trim-left-r 0 --p-trunc-len-f 150 --p-trunc-len-r 150 --o-representative-sequences /path/to/output/rep-seqs-dada2.qza --o-table /path/to/output/table-dada2.qza --o-denoising-stats /path/to/output/stats-dada2.qza
+
+qiime feature-table summarize --i-table /path/to/output/table-dada2.qza --o-visualization /path/to/output/table-dada2.qzv --m-sample-metadata-file /path/to/input/mapping.txt
+
+qiime feature-table tabulate-seqs --i-data /path/to/output/rep-seqs-dada2.qza --o-visualization /path/to/output/rep-seqs-dada2.qzv
+
+qiime metadata tabulate --m-input-file /path/to/output/stats-dada2.qza --o-visualization /path/to/output/stats-dada2.qzv
