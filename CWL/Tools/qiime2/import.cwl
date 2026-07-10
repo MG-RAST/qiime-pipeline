@@ -24,16 +24,16 @@ stdout: import.out
 
 # The inputs for this process.
 inputs:
-    semantic-type:
+    semantic_type:
         type: string
         default: EMPPairedEndSequences
         inputBinding:
             prefix: --type
-    input-path:
+    input_path:
         type: Directory
         inputBinding:
             prefix: --input-path
-    output-path:
+    output_path:
         type: string
         default: import.sequences.qza
         inputBinding:
@@ -47,4 +47,4 @@ outputs:
   artifact:
     type: File
     outputBinding:
-        glob: $(inputs.output-path)
+        glob: $(inputs.output_path)
