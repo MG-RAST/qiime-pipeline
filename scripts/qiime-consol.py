@@ -8,6 +8,7 @@ import glob
 import logging
 import datetime
 import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 import time
 import json
@@ -256,7 +257,7 @@ def stage_data(input_dir, output_dir , force = False):
     search_patterns = ['**/*mapping*']
     mapping_files_to_process = []
     for pattern in search_patterns:
-        mapping_files_to_process.extend(glob.glob(os.path.join(input_dir, pattern)))
+        mapping_files_to_process.extend(glob.glob(os.path.join(input_dir, pattern), recursive=True))
 
 
     mapping_file = None
@@ -306,6 +307,14 @@ def link_output(source, target_dir):
     else:
         logger.debug('Creating symlink from {} to {}'.format(source, output_path))
         os.symlink(target , output_path )
+
+
+def _sanitize_for_filename(name):
+    """Make a metadata column name safe to embed in an output filename.
+    Non-alphanumeric characters (except - _ .) become underscores. The real,
+    unsanitized column name is still passed to --m-metadata-column."""
+    safe = ''.join(c if (c.isalnum() or c in ('-', '_', '.')) else '_' for c in str(name))
+    return safe or 'column'
 
 
 def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 100, p_sampling_depth = 500 , group_by=None, results = {}):
@@ -360,16 +369,12 @@ def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 100, p_samp
                                                              '--o-visualization', alpha_group_significance_output])
         logger.debug('Alpha group significance output: {}'.format(results['alpha_group_significance']))
 
-
-        logger.debug('Alpha group significance output: {}'.format(results['alpha_group_significance']))
-
         if results['alpha_group_significance'].returncode != 0:
-            logger.error('Error running alpha group significance')
+            logger.error('Error running faith-pd alpha group significance (non-fatal, continuing)')
             logger.error(results['alpha_group_significance'])
-            logger.info('Exiting alpha diveristy analysis')
-            return
 
-    link_output(alpha_group_significance_output, input_dir)
+    if os.path.exists(alpha_group_significance_output):
+        link_output(alpha_group_significance_output, input_dir)
 
 
     # Run qiime diversity alpha-group-significance on shannon_vector
@@ -393,7 +398,12 @@ def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 100, p_samp
                                                                '--o-visualization', shannon_group_significance_output])
         logger.debug('Shannon group significance output: {}'.format(results['shannon_group_significance']))
 
-    link_output(shannon_group_significance_output, input_dir)
+        if results['shannon_group_significance'].returncode != 0:
+            logger.error('Error running shannon alpha group significance (non-fatal, continuing)')
+            logger.error(results['shannon_group_significance'])
+
+    if os.path.exists(shannon_group_significance_output):
+        link_output(shannon_group_significance_output, input_dir)
 
     # Run qiime diversity alpha-group-significance on evenness_vector
     # qiime diversity alpha-group-significance \
@@ -416,7 +426,12 @@ def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 100, p_samp
                                                                 '--o-visualization', evenness_group_significance_output])
         logger.debug('Evenness group significance output: {}'.format(results['evenness_group_significance']))
 
-    link_output(evenness_group_significance_output, input_dir)
+        if results['evenness_group_significance'].returncode != 0:
+            logger.error('Error running evenness alpha group significance (non-fatal, continuing)')
+            logger.error(results['evenness_group_significance'])
+
+    if os.path.exists(evenness_group_significance_output):
+        link_output(evenness_group_significance_output, input_dir)
     
 
 
@@ -455,25 +470,35 @@ def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 100, p_samp
     # --o-visualization $OUTPUT_DIR/core-metrics-results/unweighted-unifrac-body-site-significance.qzv \
     # --p-pairwise
 
-    beta_group_significance_output_name = 'unweighted-unifrac-body-site-significance.qzv'
-    beta_group_significance_output = os.path.join(core_metrics_output_dir, beta_group_significance_output_name)
+    # Run beta-group-significance once per requested metadata column. Accepts a
+    # single column (str) or multiple columns (list) via repeated --beta-diversity-group-by.
+    if group_by:
+        group_by_columns = [group_by] if isinstance(group_by, str) else list(group_by)
+        distance_matrix = os.path.join(core_metrics_output_dir, 'unweighted_unifrac_distance_matrix.qza')
+        for column in group_by_columns:
+            safe_column = _sanitize_for_filename(column)
+            result_key = 'beta_group_significance_{}'.format(safe_column)
+            beta_group_significance_output = os.path.join(
+                core_metrics_output_dir, 'unweighted-unifrac-{}-significance.qzv'.format(safe_column))
 
-    # check if output already exists, skip if it does unless force is set to True
-    if group_by is not None:
-        if os.path.exists(beta_group_significance_output):
-            logger.info('Beta group significance output already exists. Skipping')
-        else:
-            logger.info('Running beta group significance')
-            logger.debug("Options: --i-distance-matrix {} --m-metadata-file {} --m-metadata-column BodySite --o-visualization {} --p-pairwise".format(os.path.join(core_metrics_output_dir, 'unweighted_unifrac_distance_matrix.qza'), os.path.join(input_dir, 'mapping.txt'), beta_group_significance_output))
-            results['beta_group_significance'] = subprocess.run(['qiime', 'diversity', 'beta-group-significance',
-                                                                '--i-distance-matrix', os.path.join(core_metrics_output_dir, 'unweighted_unifrac_distance_matrix.qza'),
-                                                                '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
-                                                                '--m-metadata-column', group_by,
-                                                                '--o-visualization', beta_group_significance_output,
-                                                                '--p-pairwise'])
-            logger.debug('Beta group significance output: {}'.format(results['beta_group_significance']))
+            # check if output already exists, skip if it does unless force is set to True
+            if os.path.exists(beta_group_significance_output):
+                logger.info('Beta group significance for {} already exists. Skipping'.format(column))
+            else:
+                logger.info('Running beta group significance for column: {}'.format(column))
+                logger.debug("Options: --i-distance-matrix {} --m-metadata-file {} --m-metadata-column {} --o-visualization {} --p-pairwise".format(distance_matrix, os.path.join(input_dir, 'mapping.txt'), column, beta_group_significance_output))
+                results[result_key] = subprocess.run(['qiime', 'diversity', 'beta-group-significance',
+                                                     '--i-distance-matrix', distance_matrix,
+                                                     '--m-metadata-file', os.path.join(input_dir, 'mapping.txt'),
+                                                     '--m-metadata-column', column,
+                                                     '--o-visualization', beta_group_significance_output,
+                                                     '--p-pairwise'])
+                logger.debug('Beta group significance output ({}): {}'.format(column, results[result_key]))
+                if results[result_key].returncode != 0:
+                    logger.error('Error running beta group significance for column: {}'.format(column))
 
-        link_output(beta_group_significance_output, input_dir)
+            if os.path.exists(beta_group_significance_output):
+                link_output(beta_group_significance_output, input_dir)
     else:
         logger.info('No group by column specified. Skipping beta group significance')
 
@@ -729,12 +754,12 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
 
         phyla_table_dir = os.path.join(output_dir, 'rel-phyla-table-level-{}'.format(level))
        
-        results['export'] = subprocess.run(['qiime', 'tools', 'export', 
+        results['export'] = subprocess.run(['qiime', 'tools', 'export',
                                             '--input-path', os.path.join(output_dir, rel_phyla_table),
-                                            '--output-path', os.path.join(output_dir, phyla_table_dir )])
+                                            '--output-path', phyla_table_dir])
         logger.debug('Export output: {}'.format(results['export']))
 
-        link_output(os.path.join(output_dir, phyla_table_dir), input_dir)
+        link_output(phyla_table_dir, input_dir)
 
 
         # We now have our new relative-frequency table in .biom format. Let's convert this to a text file that we can open easily:
@@ -745,29 +770,29 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
         # # You might want to change this filename for calrity
         # biom convert -i feature-table.biom -o rel-phyla-table.tsv --to-tsv
 
-        if not os.path.exists(os.path.join(output_dir, phyla_table_dir, f'feature-table.biom')):
+        if not os.path.exists(os.path.join(phyla_table_dir, 'feature-table.biom')):
             logger.error('Feature table does not exists. Exiting')
             return
-        
-        if os.path.exists(os.path.join(output_dir, phyla_table_dir, f'rel-phyla-table.{level}.tsv')):
+
+        if os.path.exists(os.path.join(phyla_table_dir, f'rel-phyla-table.{level}.tsv')):
             logger.info('Relative phyla table already exists. Skipping')
         else:
             # os.chdir(os.path.join(output_dir, 'rel-table'))
             # results['biom_convert'] = subprocess.run(['biom', 'convert', '-i', 'feature-table.biom',
             #                                           '-o', 'rel-phyla-table.tsv', '--to-tsv'])
-        
 
-            results['biom_convert'] = subprocess.run(['biom', 'convert', 
-                                                    '-i', os.path.join( input_dir , phyla_table_dir, 'feature-table.biom'),
-                                                    '-o', os.path.join( output_dir , phyla_table_dir ,f'rel-phyla-table.{level}.tsv'), 
+
+            results['biom_convert'] = subprocess.run(['biom', 'convert',
+                                                    '-i', os.path.join(phyla_table_dir, 'feature-table.biom'),
+                                                    '-o', os.path.join(phyla_table_dir, f'rel-phyla-table.{level}.tsv'),
                                                     '--to-tsv'])
-            
+
             logger.debug('Biom convert output: {}'.format(results['biom_convert']))
 
-        link_output(os.path.join(output_dir, phyla_table_dir, f'rel-phyla-table.{level}.tsv'), input_dir)
+        link_output(os.path.join(phyla_table_dir, f'rel-phyla-table.{level}.tsv'), input_dir)
 
 
-def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000, beta_group_significance_column=None , barcode_column_name='BarcodeSequence', group_by=None, force=False):  
+def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000, beta_group_significance_column=None , barcode_column_name='BarcodeSequence', group_by=None, n_threads=0, force=False):
     # Create output directory and raw data directory
   
     # check if the input directory exists
@@ -901,14 +926,15 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     if os.path.exists(denoise_output) and os.path.exists(table_output) and os.path.exists(stats_output):
         logger.info('Denoise outputs already exist. Skipping')
     else:
-        logger.info('Running dada2 denoise paired')
-        logger.debug("Options: --i-demultiplexed-seqs {} --p-trim-left-f 0 --p-trim-left-r 0 --p-trunc-len-f {} --p-trunc-len-r {} --o-representative-sequences {} --o-table {} --o-denoising-stats {}".format(demux_output, p_trunc_len_f, p_trunc_len_r, denoise_output, table_output, stats_output))
+        logger.info('Running dada2 denoise paired (n_threads={})'.format(n_threads))
+        logger.debug("Options: --i-demultiplexed-seqs {} --p-trim-left-f 0 --p-trim-left-r 0 --p-trunc-len-f {} --p-trunc-len-r {} --p-n-threads {} --o-representative-sequences {} --o-table {} --o-denoising-stats {}".format(demux_output, p_trunc_len_f, p_trunc_len_r, n_threads, denoise_output, table_output, stats_output))
         results['denoise'] = subprocess.run(['qiime', 'dada2', 'denoise-paired',
                                             '--i-demultiplexed-seqs', demux_output,
                                             '--p-trim-left-f', '0',
                                             '--p-trim-left-r', '0',
                                             '--p-trunc-len-f', str(p_trunc_len_f),
                                             '--p-trunc-len-r', str(p_trunc_len_r),
+                                            '--p-n-threads', str(n_threads),
                                             '--o-representative-sequences', denoise_output,
                                             '--o-table', table_output,
                                             '--o-denoising-stats', stats_output])
@@ -1102,6 +1128,50 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
 
 
 
+def denoise_data(base_dir, p_trunc_len_f=0, p_trunc_len_r=0, n_threads=0, force=False):
+    """Standalone dada2 denoise-paired step (same base_dir/input/output convention
+    as run_workflow). Expects output/demux-full.qza to exist from a prior demux."""
+    if not os.path.exists(base_dir):
+        raise ValueError('Input directory does not exist')
+
+    input_dir = os.path.join(base_dir, 'input')
+    output_dir = os.path.join(base_dir, 'output')
+
+    demux_output = os.path.join(output_dir, 'demux-full.qza')
+    if not os.path.exists(demux_output):
+        raise ValueError('Demultiplexed sequences not found: {}. Run demux first.'.format(demux_output))
+
+    denoise_output = os.path.join(output_dir, 'rep-seqs-dada2.qza')
+    table_output = os.path.join(output_dir, 'table-dada2.qza')
+    stats_output = os.path.join(output_dir, 'stats-dada2.qza')
+
+    # check if outputs already exist, skip if they do unless force is set to True
+    if os.path.exists(denoise_output) and os.path.exists(table_output) and os.path.exists(stats_output) and not force:
+        logger.info('Denoise outputs already exist. Skipping')
+    else:
+        logger.info('Running dada2 denoise paired (n_threads={})'.format(n_threads))
+        logger.debug("Options: --i-demultiplexed-seqs {} --p-trim-left-f 0 --p-trim-left-r 0 --p-trunc-len-f {} --p-trunc-len-r {} --p-n-threads {} --o-representative-sequences {} --o-table {} --o-denoising-stats {}".format(demux_output, p_trunc_len_f, p_trunc_len_r, n_threads, denoise_output, table_output, stats_output))
+        result = subprocess.run(['qiime', 'dada2', 'denoise-paired',
+                                 '--i-demultiplexed-seqs', demux_output,
+                                 '--p-trim-left-f', '0',
+                                 '--p-trim-left-r', '0',
+                                 '--p-trunc-len-f', str(p_trunc_len_f),
+                                 '--p-trunc-len-r', str(p_trunc_len_r),
+                                 '--p-n-threads', str(n_threads),
+                                 '--o-representative-sequences', denoise_output,
+                                 '--o-table', table_output,
+                                 '--o-denoising-stats', stats_output])
+        logger.debug('Denoise output: {}'.format(result))
+        if result.returncode != 0:
+            logger.error('Error running dada2 denoise-paired')
+            return result
+
+    link_output(denoise_output, input_dir)
+    link_output(table_output, input_dir)
+    link_output(stats_output, input_dir)
+    return None
+
+
 def run_tool(name, args):
     # Run a QIIME tool with the given arguments
     # qiime <name> <args>
@@ -1110,6 +1180,100 @@ def run_tool(name, args):
     results = subprocess.run(['qiime', 'tool' , name] + args)
     logger.debug('Results: {}'.format(results))
 
+
+
+# Minimum free space (GB) a temp directory should have. QIIME2 demux/dada2
+# write large intermediate files; the default /tmp is often a small RAM-backed
+# tmpfs that these steps exhaust ('No space left on device').
+MIN_TMP_FREE_GB = 50
+
+
+def _fstype(path):
+    """Best-effort filesystem type of the mount containing path (Linux)."""
+    try:
+        real = os.path.realpath(path)
+        best_mp, best_type = None, None
+        with open('/proc/mounts') as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) < 3:
+                    continue
+                mp, fstype = parts[1], parts[2]
+                if real == mp or real.startswith(mp.rstrip('/') + '/'):
+                    if best_mp is None or len(mp) > len(best_mp):
+                        best_mp, best_type = mp, fstype
+        return best_type
+    except Exception:
+        return None
+
+
+def _usable_tmp(path, avoid_tmpfs=True):
+    """Return free GB if path (created if needed) is writable and acceptable, else None."""
+    try:
+        os.makedirs(path, exist_ok=True)
+        test_file = os.path.join(path, '.qiime_tmp_write_test')
+        with open(test_file, 'w') as fh:
+            fh.write('ok')
+        os.remove(test_file)
+    except Exception:
+        return None
+    if avoid_tmpfs and _fstype(path) == 'tmpfs':
+        return None
+    try:
+        return shutil.disk_usage(path).free / (1024 ** 3)
+    except Exception:
+        return None
+
+
+def resolve_tmpdir(base_hint=None, cli_tmpdir=None):
+    """Pick a roomy, disk-backed temp directory and point QIIME2 at it.
+
+    Precedence: --tmpdir > $QIIME_TMPDIR > $TMPDIR (if not tmpfs) >
+    /scratch/tmp/qiime > <base_dir>/tmp. Explicitly requested locations
+    (--tmpdir / $QIIME_TMPDIR) are honored even if small or tmpfs, with a
+    warning; auto-detected candidates skip tmpfs and require MIN_TMP_FREE_GB.
+    Sets TMPDIR/TMP/TEMP and tempfile.tempdir so native `qiime` subprocesses
+    inherit it. Returns the chosen path, or None if none was usable.
+    """
+    candidates = []  # (source_label, path, avoid_tmpfs)
+    if cli_tmpdir:
+        candidates.append(('--tmpdir', cli_tmpdir, False))
+    if os.environ.get('QIIME_TMPDIR'):
+        candidates.append(('$QIIME_TMPDIR', os.environ['QIIME_TMPDIR'], False))
+    if os.environ.get('TMPDIR'):
+        candidates.append(('$TMPDIR', os.environ['TMPDIR'], True))
+    candidates.append(('local scratch', '/scratch/tmp/qiime', True))
+    if base_hint:
+        candidates.append(('base dir', os.path.join(base_hint, 'tmp'), True))
+
+    chosen, fallback = None, None
+    for source, path, avoid_tmpfs in candidates:
+        free_gb = _usable_tmp(path, avoid_tmpfs=avoid_tmpfs)
+        if free_gb is None:
+            continue
+        if fallback is None:
+            fallback = (source, path, free_gb)
+        if free_gb >= MIN_TMP_FREE_GB:
+            chosen = (source, path, free_gb)
+            break
+    chosen = chosen or fallback
+
+    if chosen is None:
+        logger.warning('Could not resolve a writable temp directory; '
+                       'using system default: %s', tempfile.gettempdir())
+        return None
+
+    source, path, free_gb = chosen
+    os.makedirs(path, exist_ok=True)
+    for var in ('TMPDIR', 'TMP', 'TEMP'):
+        os.environ[var] = path
+    tempfile.tempdir = path
+    if free_gb < MIN_TMP_FREE_GB:
+        logger.warning('Temp directory %s (from %s) has only %.1f GB free '
+                       '(< %d GB recommended)', path, source, free_gb, MIN_TMP_FREE_GB)
+    logger.info('Using temp directory: %s (from %s, %.1f GB free)',
+                path, source, free_gb)
+    return path
 
 
 def main():
@@ -1126,6 +1290,11 @@ def main():
                         help='Set the log file'
                         )
     parser.add_argument('--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument('--tmpdir', default=None,
+                        help='Temp directory for QIIME2 intermediate files. '
+                             'Defaults to a roomy, disk-backed location '
+                             '(avoids small RAM-backed /tmp). Precedence: '
+                             '--tmpdir > $QIIME_TMPDIR > $TMPDIR > /scratch/tmp/qiime > <base_dir>/tmp')
 
 
     subparsers = parser.add_subparsers(dest='command')
@@ -1178,6 +1347,15 @@ def main():
                               the forward and reverse reads. If 0 is provided, no truncation or length filtering will be \
                               performed")
 
+    # Denoise subparser of run
+    denoise_parser.add_argument('input_dir', type=str, help='Input (base) directory containing output/demux-full.qza')
+    denoise_parser.add_argument('--p-trunc-len-f', dest="p_trunc_len_f", type=int, default=0,
+                                help="Forward read truncation length (0 = no truncation)")
+    denoise_parser.add_argument('--p-trunc-len-r', dest="p_trunc_len_r", type=int, default=0,
+                                help="Reverse read truncation length (0 = no truncation)")
+    denoise_parser.add_argument('--p-n-threads', dest="n_threads", type=int, default=0,
+                                help="Number of threads for dada2 denoise-paired. 0 = use all available cores (default). 1 = single-threaded")
+
     # Workflow subparser of run
     workflow_parser.add_argument('input_dir', type=str, help='Input directory')
     workflow_parser.add_argument('--p-trunc-len-f', dest="p_trunc_len_f" ,type=int, default=0, help="\
@@ -1201,7 +1379,8 @@ def main():
     workflow_parser.add_argument('--p-max-depth', dest="p_max_depth", type=int, default=10000, help="Maximum depth for alpha-rarefaction")
     workflow_parser.add_argument('--p-steps', dest="p_steps", type=int, default=10, help="Steps for alpha rarefaction")
     workflow_parser.add_argument('--p-sampling-depth', dest="p_sampling_depth", type=int, default=20000, help="Sampling depth for core-metrics-phylogenetic")
-    workflow_parser.add_argument('--beta-diversity-group-by', dest="beta_diversity_group_by", type=str, default=None, help="Meta data column to group by for beta diversity analysis")
+    workflow_parser.add_argument('--p-n-threads', dest="n_threads", type=int, default=0, help="Number of threads for dada2 denoise-paired. 0 = use all available cores (default). 1 = single-threaded")
+    workflow_parser.add_argument('--beta-diversity-group-by', dest="beta_diversity_group_by", action='append', default=None, help="Metadata column to group by for beta diversity group-significance. Repeat the flag for multiple columns, e.g. --beta-diversity-group-by Date_Plated --beta-diversity-group-by Laterality")
     workflow_parser.add_argument('--barcode-column-name', dest="barcode_column_name", default="barcode-sequence", help='Barcode column name in the mapping file')    
 
 
@@ -1210,15 +1389,22 @@ def main():
     args = parser.parse_args()
     logger.setLevel(args.log_level)
 
+    # Resolve a roomy, disk-backed temp dir before invoking native `qiime`.
+    if args.command == 'setup':
+        base_hint = getattr(args, 'output_dir', None)
+    else:
+        base_hint = getattr(args, 'input_dir', None)
+    resolve_tmpdir(base_hint, args.tmpdir)
+
     if args.command == 'setup':
         stage_data(args.input_dir, args.output_dir)
     elif args.command == 'run':
         if args.subcommand == 'demux':
             demux_data(args.input_dir, args.output_dir, args.p_trunc_len_f, args.p_trunc_len_r)
         elif args.subcommand == 'denoise':
-            denoise_data(args.input_dir, args.output_dir)
+            denoise_data(args.input_dir, args.p_trunc_len_f, args.p_trunc_len_r, n_threads=args.n_threads)
         elif args.subcommand == 'workflow':
-            run_workflow(args.input_dir, args.p_trunc_len_f, args.p_trunc_len_r , args.p_max_depth, args.p_steps, args.p_sampling_depth , args.beta_diversity_group_by , barcode_column_name=args.barcode_column_name)
+            run_workflow(args.input_dir, args.p_trunc_len_f, args.p_trunc_len_r , args.p_max_depth, args.p_steps, args.p_sampling_depth , args.beta_diversity_group_by , barcode_column_name=args.barcode_column_name, n_threads=args.n_threads)
         else:
             raise ValueError('Invalid subcommand')
     elif args.command == 'tool':
