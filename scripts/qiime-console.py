@@ -317,6 +317,45 @@ def _sanitize_for_filename(name):
     return safe or 'column'
 
 
+def read_metadata_columns(mapping_file):
+    """Return the list of column names from a QIIME mapping/metadata file header
+    (first line, tab-delimited)."""
+    with open(mapping_file) as f:
+        header = f.readline().rstrip('\r\n')
+    return header.split('\t')
+
+
+def _normalize_column_key(name):
+    """Loose key for fuzzy column matching: lowercase with spaces, underscores,
+    hyphens and dots removed. So 'Date_Plated', 'Date Plated' and 'date-plated'
+    all collapse to the same key."""
+    key = str(name).strip().lower()
+    for ch in (' ', '_', '-', '.'):
+        key = key.replace(ch, '')
+    return key
+
+
+def resolve_metadata_column(requested, available_columns):
+    """Resolve a user-requested metadata column against the mapping file header.
+
+    Exact match wins. Otherwise a normalized (case/space/underscore/hyphen-
+    insensitive) match is used if it is unambiguous. Raises ValueError if the
+    column cannot be found at all, or if normalization is ambiguous."""
+    if requested in available_columns:
+        return requested
+    req_key = _normalize_column_key(requested)
+    matches = [c for c in available_columns if _normalize_column_key(c) == req_key]
+    if len(matches) == 1:
+        logger.warning("Metadata column '%s' not found exactly; using closest match '%s'",
+                       requested, matches[0])
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError("Metadata column '{}' is ambiguous; it normalizes to multiple "
+                         "columns in the mapping file: {}".format(requested, matches))
+    raise ValueError("Metadata column '{}' not found in mapping file. Available columns: {}".format(
+        requested, available_columns))
+
+
 def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 100, p_sampling_depth = 500 , group_by=None, results = {}):
 
     # Run qiime diversity core-metrics-phylogenetic
@@ -804,6 +843,20 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     input_dir = os.path.join(base_dir, 'input')
     output_dir = os.path.join(base_dir, 'output')
 
+    # Validate/normalize requested beta-diversity metadata columns up front, so a
+    # typo (e.g. Date_Plated vs 'Date Plated') fails fast here rather than after
+    # hours of demux/dada2. Resolves each to its actual column name.
+    if beta_group_significance_column:
+        requested_columns = ([beta_group_significance_column]
+                             if isinstance(beta_group_significance_column, str)
+                             else list(beta_group_significance_column))
+        mapping_file = os.path.join(input_dir, 'mapping.txt')
+        if not os.path.exists(mapping_file):
+            raise ValueError('Mapping file not found for metadata validation: {}'.format(mapping_file))
+        available_columns = read_metadata_columns(mapping_file)
+        beta_group_significance_column = [resolve_metadata_column(c, available_columns)
+                                          for c in requested_columns]
+        logger.info('Validated beta-diversity metadata columns: {}'.format(beta_group_significance_column))
 
     import_input_dir = os.path.join(input_dir ,'raw_data')
     import_output_name = 'paired-end-demux.qza'
