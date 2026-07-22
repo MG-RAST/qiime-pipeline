@@ -10,6 +10,7 @@ import datetime
 import subprocess
 import tempfile
 import tarfile
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 import time
 import json
@@ -857,11 +858,79 @@ DELIVERABLE_FILES = [
 DELIVERABLE_DIRS = ['core-metrics-results', 'alpha-rarefaction-results']
 
 
-def package_results(base_dir, fmt='both'):
+def _md5sum(filepath, chunk_size=1 << 20):
+    """Return the hex md5 digest of a file, read in chunks (memory-safe for
+    large artifacts)."""
+    md5 = hashlib.md5()
+    with open(filepath, 'rb') as f:
+        for chunk in iter(lambda: f.read(chunk_size), b''):
+            md5.update(chunk)
+    return md5.hexdigest()
+
+
+def _qiime_version():
+    """Best-effort QIIME 2 version string; 'unknown' if qiime isn't callable."""
+    try:
+        out = subprocess.run(['qiime', '--version'], capture_output=True, text=True)
+        return (out.stdout or out.stderr).strip().replace('\n', ' ') or 'unknown'
+    except Exception:
+        return 'unknown'
+
+
+def write_manifest(deliverable_dir, base_dir, params=None):
+    """Write MANIFEST.txt into deliverable_dir: a self-describing header (run,
+    QIIME version, timestamp, parameters) plus an md5 + size table for every
+    file in the bundle. Returns the manifest path. The manifest checksums every
+    file present at call time, so write it BEFORE creating the tarball and after
+    all other files are copied in (it does not checksum itself)."""
+    manifest_path = os.path.join(deliverable_dir, 'MANIFEST.txt')
+
+    # Collect files (relative paths), skipping any pre-existing manifest.
+    entries = []
+    for root, _dirs, files in os.walk(deliverable_dir):
+        for fn in files:
+            full = os.path.join(root, fn)
+            rel = os.path.relpath(full, deliverable_dir)
+            if rel == 'MANIFEST.txt':
+                continue
+            entries.append(rel)
+    entries.sort()
+
+    run_name = os.path.basename(os.path.normpath(base_dir)) or 'qiime'
+    lines = []
+    lines.append('QIIME 2 pipeline deliverable manifest')
+    lines.append('=' * 60)
+    lines.append('Run:           {}'.format(run_name))
+    lines.append('Generated:     {}'.format(datetime.datetime.now().isoformat(timespec='seconds')))
+    lines.append('QIIME version: {}'.format(_qiime_version()))
+    if params:
+        lines.append('Parameters:')
+        for k in sorted(params):
+            lines.append('  {} = {}'.format(k, params[k]))
+    lines.append('')
+    lines.append('Per-artifact provenance (methods, parameters, versions, citations) '
+                 'is embedded inside each .qza/.qzv; open any .qzv at '
+                 'https://view.qiime2.org and see the Provenance tab.')
+    lines.append('')
+    lines.append('Files ({}):'.format(len(entries)))
+    lines.append('{:<32}  {:>12}  {}'.format('md5', 'bytes', 'path'))
+    lines.append('{:<32}  {:>12}  {}'.format('-' * 32, '-' * 12, '-' * 4))
+    for rel in entries:
+        full = os.path.join(deliverable_dir, rel)
+        lines.append('{:<32}  {:>12}  {}'.format(_md5sum(full), os.path.getsize(full), rel))
+
+    with open(manifest_path, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    return manifest_path
+
+
+def package_results(base_dir, fmt='both', params=None):
     """Assemble a curated deliverable of key results (.qza artifacts + .qzv viewers
     + metadata) under output/deliverable/, and optionally a .tar.gz alongside it.
+    Also writes MANIFEST.txt (md5 checksums + run info) into the bundle.
 
-    fmt: 'folder' (deliverable/ only), 'tar' (.tar.gz only), or 'both' (default)."""
+    fmt:    'folder' (deliverable/ only), 'tar' (.tar.gz only), or 'both' (default).
+    params: optional dict of run parameters to record in the manifest header."""
     if not os.path.exists(base_dir):
         raise ValueError('Base directory does not exist')
     output_dir = os.path.join(base_dir, 'output')
@@ -909,6 +978,11 @@ def package_results(base_dir, fmt='both'):
 
     logger.info('Packaged {} item(s) into {}'.format(len(copied), deliverable_dir))
 
+    # Write the manifest last (after all files are in place) so it checksums the
+    # complete bundle, and before the tarball so it's included in the archive.
+    manifest = write_manifest(deliverable_dir, base_dir, params=params)
+    logger.info('Wrote manifest with checksums: {}'.format(manifest))
+
     tarball = None
     if fmt in ('tar', 'both'):
         run_name = os.path.basename(os.path.normpath(base_dir)) or 'qiime'
@@ -917,7 +991,8 @@ def package_results(base_dir, fmt='both'):
             tar.add(deliverable_dir, arcname='{}-deliverable'.format(run_name))
         logger.info('Created archive: {}'.format(tarball))
 
-    return {'deliverable_dir': deliverable_dir, 'tarball': tarball, 'items': copied}
+    return {'deliverable_dir': deliverable_dir, 'tarball': tarball,
+            'items': copied, 'manifest': manifest}
 
 
 def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000, beta_group_significance_column=None , barcode_column_name='BarcodeSequence', group_by=None, n_threads=0, force=False):
@@ -1202,7 +1277,15 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     # metadata). Best-effort: a packaging hiccup must not fail an otherwise
     # complete run, so log and continue rather than raise.
     try:
-        pkg = package_results(base_dir)
+        pkg = package_results(base_dir, params={
+            'p_trunc_len_f': p_trunc_len_f,
+            'p_trunc_len_r': p_trunc_len_r,
+            'p_sampling_depth': p_sampling_depth,
+            'p_max_depth': p_max_depth,
+            'p_steps': p_steps,
+            'beta_diversity_group_by': beta_group_significance_column,
+            'n_threads': n_threads,
+        })
         logger.info('Deliverable ready: {} ({} items)'.format(
             pkg['deliverable_dir'], len(pkg['items'])))
     except Exception as exc:
