@@ -1600,6 +1600,23 @@ def main():
     package_parser.add_argument('--format', dest='format', default='both',
         choices=['folder', 'tar', 'both'],
         help='Produce a deliverable/ folder, a .tar.gz, or both (default: both)')
+    # Optional run parameters recorded in MANIFEST.txt (only those passed are
+    # listed; defaults are None so unset flags are omitted rather than guessed).
+    package_parser.add_argument('--p-trunc-len-f', dest='p_trunc_len_f', type=int, default=None,
+        help='Record forward truncation length in the manifest')
+    package_parser.add_argument('--p-trunc-len-r', dest='p_trunc_len_r', type=int, default=None,
+        help='Record reverse truncation length in the manifest')
+    package_parser.add_argument('--p-sampling-depth', dest='p_sampling_depth', type=int, default=None,
+        help='Record sampling depth in the manifest')
+    package_parser.add_argument('--p-max-depth', dest='p_max_depth', type=int, default=None,
+        help='Record alpha-rarefaction max depth in the manifest')
+    package_parser.add_argument('--p-steps', dest='p_steps', type=int, default=None,
+        help='Record alpha-rarefaction steps in the manifest')
+    package_parser.add_argument('--p-n-threads', dest='n_threads', type=int, default=None,
+        help='Record dada2 thread count in the manifest')
+    package_parser.add_argument('--beta-diversity-group-by', dest='beta_diversity_group_by',
+        action='append', default=None,
+        help='Record beta-diversity grouping column(s) in the manifest (repeatable)')
 
     # Run qiime subparser
     run_parser = subparsers.add_parser('run', help='Run QIIME')
@@ -1690,7 +1707,11 @@ def main():
     if args.command == 'setup':
         stage_data(args.input_dir, args.output_dir)
     elif args.command == 'package':
-        package_results(args.input_dir, fmt=args.format)
+        # Only record parameters the user actually passed (non-None).
+        param_keys = ['p_trunc_len_f', 'p_trunc_len_r', 'p_sampling_depth',
+                      'p_max_depth', 'p_steps', 'n_threads', 'beta_diversity_group_by']
+        params = {k: getattr(args, k) for k in param_keys if getattr(args, k) is not None}
+        package_results(args.input_dir, fmt=args.format, params=params or None)
     elif args.command == 'run':
         if args.subcommand == 'demux':
             demux_data(args.input_dir, args.output_dir, args.p_trunc_len_f, args.p_trunc_len_r)
