@@ -843,6 +843,14 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     input_dir = os.path.join(base_dir, 'input')
     output_dir = os.path.join(base_dir, 'output')
 
+    # Group demux outputs so shared results are easy to browse:
+    #   output/demux/           -> demux artifacts (.qza + .qzv)
+    #   output/viz/demux-full/  -> extracted HTML of demux-full.qzv
+    demux_dir = os.path.join(output_dir, 'demux')
+    viz_dir = os.path.join(output_dir, 'viz')
+    os.makedirs(demux_dir, exist_ok=True)
+    os.makedirs(viz_dir, exist_ok=True)
+
     # Validate/normalize requested beta-diversity metadata columns up front, so a
     # typo (e.g. Date_Plated vs 'Date Plated') fails fast here rather than after
     # hours of demux/dada2. Resolves each to its actual column name.
@@ -895,8 +903,8 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
 
     demux_output_name = 'demux-full.qza'
     demux_details_output_name = 'demux-details.qza'
-    demux_output = os.path.join(output_dir, demux_output_name)
-    demux_details_output = os.path.join(output_dir, demux_details_output_name)
+    demux_output = os.path.join(demux_dir, demux_output_name)
+    demux_details_output = os.path.join(demux_dir, demux_details_output_name)
 
     # check if outputs already exist, skip if they do unless force is set to True
     if os.path.exists(demux_output) and os.path.exists(demux_details_output):
@@ -922,7 +930,7 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     # --o-visualization $OUTPUT_DIR/demux-full.qzv
 
     demux_viz_output_name = 'demux-full.qzv'
-    demux_viz_output = os.path.join(output_dir, demux_viz_output_name)
+    demux_viz_output = os.path.join(demux_dir, demux_viz_output_name)
 
     # check if output already exists, skip if it does unless force is set to True
     if os.path.exists(demux_viz_output):
@@ -937,12 +945,33 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     
     link_output(demux_viz_output, input_dir)
 
+    # Run metadata tabulate on the demux error-correction details
+    # qiime metadata tabulate \
+    # --m-input-file $OUTPUT_DIR/demux-details.qza \
+    # --o-visualization $OUTPUT_DIR/demux-details.qzv
+
+    demux_details_viz_output_name = 'demux-details.qzv'
+    demux_details_viz_output = os.path.join(demux_dir, demux_details_viz_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(demux_details_viz_output):
+        logger.info('Demux details visualization output already exists. Skipping')
+    else:
+        logger.info('Running metadata tabulate on demux details')
+        logger.debug("Options: --m-input-file {} --o-visualization {}".format(demux_details_output, demux_details_viz_output))
+        results['demux_details_viz'] = subprocess.run(['qiime', 'metadata', 'tabulate',
+                                                       '--m-input-file', demux_details_output,
+                                                       '--o-visualization', demux_details_viz_output])
+        logger.debug('Demux details visualization output: {}'.format(results['demux_details_viz']))
+
+    link_output(demux_details_viz_output, input_dir)
+
     # Export the demux visualization
     # qiime tools export \
     # --input-path $OUTPUT_DIR/demux-full.qzv \
     # --output-path $OUTPUT_DIR/demux-full
 
-    demux_viz_export_dir = os.path.join(output_dir, 'demux-full')
+    demux_viz_export_dir = os.path.join(viz_dir, 'demux-full')
 
     # check if output already exists, skip if it does unless force is set to True
     if os.path.exists(demux_viz_export_dir):
@@ -1061,6 +1090,19 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
         logger.debug('Stats visualization output: {}'.format(results['stats_viz']))
 
     link_output(stats_viz_output, input_dir)
+
+    # Copy the sample metadata into the output directory so the shared results
+    # are self-contained (input/mapping.txt is otherwise only read, never shipped).
+    # A real copy (not a symlink) so it survives detaching output/ from the run.
+    mapping_file = os.path.join(input_dir, 'mapping.txt')
+    metadata_output = os.path.join(output_dir, 'metadata.tsv')
+    if os.path.exists(metadata_output):
+        logger.info('metadata.tsv already exists in output directory. Skipping')
+    elif os.path.exists(mapping_file):
+        logger.info('Copying sample metadata to {}'.format(metadata_output))
+        shutil.copyfile(mapping_file, metadata_output)
+    else:
+        logger.warning('Mapping file not found, skipping metadata.tsv: {}'.format(mapping_file))
 
 
     run_phylogeny_analysis(base_dir, p_max_depth, p_steps)
@@ -1183,16 +1225,22 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
 
 def denoise_data(base_dir, p_trunc_len_f=0, p_trunc_len_r=0, n_threads=0, force=False):
     """Standalone dada2 denoise-paired step (same base_dir/input/output convention
-    as run_workflow). Expects output/demux-full.qza to exist from a prior demux."""
+    as run_workflow). Expects demux-full.qza to exist from a prior demux."""
     if not os.path.exists(base_dir):
         raise ValueError('Input directory does not exist')
 
     input_dir = os.path.join(base_dir, 'input')
     output_dir = os.path.join(base_dir, 'output')
 
-    demux_output = os.path.join(output_dir, 'demux-full.qza')
+    # run_workflow now writes demux artifacts under output/demux/; fall back to the
+    # legacy flat output/demux-full.qza so older run directories still work.
+    demux_output = os.path.join(output_dir, 'demux', 'demux-full.qza')
     if not os.path.exists(demux_output):
-        raise ValueError('Demultiplexed sequences not found: {}. Run demux first.'.format(demux_output))
+        legacy_demux_output = os.path.join(output_dir, 'demux-full.qza')
+        if os.path.exists(legacy_demux_output):
+            demux_output = legacy_demux_output
+        else:
+            raise ValueError('Demultiplexed sequences not found: {}. Run demux first.'.format(demux_output))
 
     denoise_output = os.path.join(output_dir, 'rep-seqs-dada2.qza')
     table_output = os.path.join(output_dir, 'table-dada2.qza')
@@ -1401,7 +1449,7 @@ def main():
                               performed")
 
     # Denoise subparser of run
-    denoise_parser.add_argument('input_dir', type=str, help='Input (base) directory containing output/demux-full.qza')
+    denoise_parser.add_argument('input_dir', type=str, help='Input (base) directory containing output/demux/demux-full.qza')
     denoise_parser.add_argument('--p-trunc-len-f', dest="p_trunc_len_f", type=int, default=0,
                                 help="Forward read truncation length (0 = no truncation)")
     denoise_parser.add_argument('--p-trunc-len-r', dest="p_trunc_len_r", type=int, default=0,
