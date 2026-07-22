@@ -254,13 +254,13 @@ fi
 
 
 
-if [ ! -f $INPUT_DIR/rep-seqs-dada2.qza ] || [ ! -f $INPUT_DIR/table-dada2.qza ] || [ ! -f $INPUT_DIR/taxonomy.qza ] || [ ! -f $INPUT_DIR/gg-18-8-99-515-806-nb-classifier.qza ]
+if [ ! -f $INPUT_DIR/rep-seqs-dada2.qza ] || [ ! -f $INPUT_DIR/table-dada2.qza ] || [ ! -f $INPUT_DIR/taxonomy.qza ] || [ ! -f $INPUT_DIR/gg-13-8-99-515-806-nb-classifier.qza ]
 then
     echo "Skipping taxonomic analysis - missing input files"
 else
     echo "Running taxonomic analysis"
     qiime feature-classifier classify-sklearn \
-    --i-classifier $INPUT_DIR/gg-18-8-99-515-806-nb-classifier.qza \
+    --i-classifier $INPUT_DIR/gg-13-8-99-515-806-nb-classifier.qza \
     --i-reads $INPUT_DIR/rep-seqs-dada2.qza \
     --o-classification $OUTPUT_DIR/taxonomy.qza
 
@@ -277,7 +277,7 @@ fi
 
 
 # qiime feature-classifier classify-sklearn \
-# --i-classifier $INPUT_DIR/gg-18-8-99-515-806-nb-classifier.qza \
+# --i-classifier $INPUT_DIR/gg-13-8-99-515-806-nb-classifier.qza \
 # --i-reads $INPUT_DIR/rep-seqs-dada2.qza \
 # --o-classification $OUTPUT_DIR/taxonomy.qza
 

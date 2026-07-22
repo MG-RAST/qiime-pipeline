@@ -328,10 +328,16 @@ def _sanitize_for_filename(name):
 
 def read_metadata_columns(mapping_file):
     """Return the list of column names from a QIIME mapping/metadata file header
-    (first line, tab-delimited)."""
+    (first line, tab-delimited). Per-field whitespace is stripped (mapping files
+    often have trailing spaces in header cells, e.g. 'BarcodeSequence '), and a
+    single leading '#' is removed from the first cell (QIIME headers commonly
+    start with '#SampleID'/'#Sample ID') so columns match by their bare name."""
     with open(mapping_file) as f:
         header = f.readline().rstrip('\r\n')
-    return header.split('\t')
+    columns = [c.strip() for c in header.split('\t')]
+    if columns and columns[0].startswith('#'):
+        columns[0] = columns[0][1:].strip()
+    return columns
 
 
 def _normalize_column_key(name):
@@ -1103,11 +1109,11 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     if os.path.exists(demux_output) and os.path.exists(demux_details_output):
         logger.info('Demux outputs already exist. Skipping')
     else:
-        logger.info('Running demux')
-        logger.debug("Options: emp-paired --m-barcodes-file {} --m-barcodes-column barcode-sequence --p-rev-comp-mapping-barcodes --p-rev-comp-barcodes --i-seqs {} --o-per-sample-sequences {} --o-error-correction-details {}".format(os.path.join(input_dir, 'mapping.txt'), import_output_name, demux_output, demux_details_output))
+        logger.info('Running demux (barcode column: {})'.format(barcode_column_name))
+        logger.debug("Options: emp-paired --m-barcodes-file {} --m-barcodes-column {} --p-rev-comp-mapping-barcodes --p-rev-comp-barcodes --i-seqs {} --o-per-sample-sequences {} --o-error-correction-details {}".format(os.path.join(input_dir, 'mapping.txt'), barcode_column_name, import_output_name, demux_output, demux_details_output))
         results['demux'] = subprocess.run(['qiime', 'demux', 'emp-paired',
                                             '--m-barcodes-file', os.path.join(input_dir, 'mapping.txt'),
-                                            '--m-barcodes-column', 'BarcodeSequence', #'barcode-sequence',
+                                            '--m-barcodes-column', barcode_column_name,
                                             '--p-rev-comp-mapping-barcodes',
                                             '--p-rev-comp-barcodes',
                                             '--i-seqs', import_output,
@@ -1444,6 +1450,79 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
 
 
 
+def demux_data(base_dir, barcode_column_name='BarcodeSequence', force=False):
+    """Standalone demultiplexing step (same base_dir/input/output convention as
+    run_workflow): import the staged EMP paired-end reads, run `demux emp-paired`
+    using the mapping file barcodes, and summarize. Writes into output/demux/ and
+    links artifacts back into input/ for downstream steps. Expects `setup` to have
+    already staged input/raw_data/ and input/mapping.txt."""
+    if not os.path.exists(base_dir):
+        raise ValueError('Base directory does not exist')
+
+    input_dir = os.path.join(base_dir, 'input')
+    output_dir = os.path.join(base_dir, 'output')
+    demux_dir = os.path.join(output_dir, 'demux')
+    os.makedirs(demux_dir, exist_ok=True)
+
+    mapping_file = os.path.join(input_dir, 'mapping.txt')
+    if not os.path.exists(mapping_file):
+        raise ValueError('Mapping file not found: {}. Run setup first.'.format(mapping_file))
+
+    # Import staged raw reads (EMP paired-end) if not already imported.
+    import_input_dir = os.path.join(input_dir, 'raw_data')
+    import_output = os.path.join(output_dir, 'paired-end-demux.qza')
+    if os.path.exists(import_output) and not force:
+        logger.info('Import output already exists. Skipping')
+    else:
+        if not os.path.isdir(import_input_dir):
+            raise ValueError('Raw data directory not found: {}. Run setup first.'.format(import_input_dir))
+        logger.info('Running import on {}'.format(import_input_dir))
+        result = subprocess.run(['qiime', 'tools', 'import',
+                                 '--type', 'EMPPairedEndSequences',
+                                 '--input-path', import_input_dir,
+                                 '--output-path', import_output])
+        if result.returncode != 0:
+            logger.error('Error running qiime tools import')
+            return result
+    link_output(import_output, input_dir)
+
+    # Demultiplex.
+    demux_output = os.path.join(demux_dir, 'demux-full.qza')
+    demux_details_output = os.path.join(demux_dir, 'demux-details.qza')
+    if os.path.exists(demux_output) and os.path.exists(demux_details_output) and not force:
+        logger.info('Demux outputs already exist. Skipping')
+    else:
+        logger.info('Running demux (barcode column: {})'.format(barcode_column_name))
+        result = subprocess.run(['qiime', 'demux', 'emp-paired',
+                                 '--m-barcodes-file', mapping_file,
+                                 '--m-barcodes-column', barcode_column_name,
+                                 '--p-rev-comp-mapping-barcodes',
+                                 '--p-rev-comp-barcodes',
+                                 '--i-seqs', import_output,
+                                 '--o-per-sample-sequences', demux_output,
+                                 '--o-error-correction-details', demux_details_output])
+        if result.returncode != 0:
+            logger.error('Error running qiime demux emp-paired')
+            return result
+    link_output(demux_output, input_dir)
+    link_output(demux_details_output, input_dir)
+
+    # Summarize.
+    demux_viz_output = os.path.join(demux_dir, 'demux-full.qzv')
+    if os.path.exists(demux_viz_output) and not force:
+        logger.info('Demux visualization already exists. Skipping')
+    else:
+        logger.info('Running demux summarize')
+        result = subprocess.run(['qiime', 'demux', 'summarize',
+                                 '--i-data', demux_output,
+                                 '--o-visualization', demux_viz_output])
+        if result.returncode != 0:
+            logger.error('Error running qiime demux summarize')
+            return result
+    link_output(demux_viz_output, input_dir)
+    return None
+
+
 def denoise_data(base_dir, p_trunc_len_f=0, p_trunc_len_r=0, n_threads=0, force=False):
     """Standalone dada2 denoise-paired step (same base_dir/input/output convention
     as run_workflow). Expects demux-full.qza to exist from a prior demux."""
@@ -1729,7 +1808,8 @@ def main():
     workflow_parser.add_argument('--p-sampling-depth', dest="p_sampling_depth", type=int, default=20000, help="Sampling depth for core-metrics-phylogenetic")
     workflow_parser.add_argument('--p-n-threads', dest="n_threads", type=int, default=0, help="Number of threads for dada2 denoise-paired. 0 = use all available cores (default). 1 = single-threaded")
     workflow_parser.add_argument('--beta-diversity-group-by', dest="beta_diversity_group_by", action='append', default=None, help="Metadata column to group by for beta diversity group-significance. Repeat the flag for multiple columns, e.g. --beta-diversity-group-by Date_Plated --beta-diversity-group-by Laterality")
-    workflow_parser.add_argument('--barcode-column-name', dest="barcode_column_name", default="barcode-sequence", help='Barcode column name in the mapping file')    
+    workflow_parser.add_argument('--barcode-column-name', dest="barcode_column_name", default="BarcodeSequence", help='Barcode column name in the mapping file (default: BarcodeSequence)')
+    demux_parser.add_argument('--barcode-column-name', dest="barcode_column_name", default="BarcodeSequence", help='Barcode column name in the mapping file (default: BarcodeSequence)')
 
 
 
@@ -1754,7 +1834,7 @@ def main():
         package_results(args.input_dir, fmt=args.format, params=params or None)
     elif args.command == 'run':
         if args.subcommand == 'demux':
-            demux_data(args.input_dir, args.output_dir, args.p_trunc_len_f, args.p_trunc_len_r)
+            demux_data(args.input_dir, barcode_column_name=args.barcode_column_name)
         elif args.subcommand == 'denoise':
             denoise_data(args.input_dir, args.p_trunc_len_f, args.p_trunc_len_r, n_threads=args.n_threads)
         elif args.subcommand == 'workflow':
