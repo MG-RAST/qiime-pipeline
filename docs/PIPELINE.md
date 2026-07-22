@@ -140,8 +140,8 @@ One row per QIIME step in execution order. All commands are `qiime <...>` run vi
 | `taxonomy.qza` | .qza | Per-ASV taxonomic assignments | **Exported** |
 | `taxonomy.qzv` | .qzv | Tabulated taxonomy | **Exported** |
 | `taxa-bar-plots.qzv` | .qzv | Interactive stacked taxa bar plots | **Exported** |
-| `core-metrics-results/` | dir | Rarefied table, alpha vectors, distance matrices, PCoA + Emperor, group-significance | **Exported** |
-| `alpha-rarefaction-results/` | dir | Rarefaction-curve visualization | **Exported** |
+| `core-metrics-results/` | dir | Rarefied table, alpha vectors, distance matrices, PCoA + Emperor, group-significance | **Exported** (`.qza`+`.qzv` only) |
+| `alpha-rarefaction-results/` | dir | Rarefaction-curve visualization | **Exported** (`.qza`+`.qzv` only) |
 | `phyla-table.<1-7>.qza` | .qza | ASV table collapsed to each rank | Internal |
 | `rel-phyla-table.<1-7>.qza` | .qza | Relative-abundance table per rank | Internal |
 | `rel-phyla-table.<1-7>.tsv` | tsv | Exported rel-abundance table (biom→TSV) | Internal |
@@ -158,3 +158,29 @@ plugin/framework versions, and `citations.bib`). Open any `.qzv` at
 <https://view.qiime2.org> and read the **Provenance** tab. `MANIFEST.txt` adds
 bundle-level md5 checksums. Together these make a shared deliverable reproducible
 and self-describing.
+
+## Redundancy — what we deliberately don't ship, and why
+
+QIIME (and the pipeline) emit the same information in several forms. The
+deliverable ships **one canonical form of each result** — the sharing rule is
+**"vizzes (`.qzv`) + data artifacts (`.qza`), nothing else."** The redundant
+forms below stay out of the bundle:
+
+| Redundant form | Canonical form we ship | Why it's excluded |
+|---|---|---|
+| `viz/demux-full/` (unpacked HTML) | `demux-full.qzv` | The `.qzv` *is* the HTML, zipped + provenance. View it at view.qiime2.org. |
+| `rel-phyla-table.*.tsv`, `rel-phyla-table-level-*/` (biom) | `.qza` feature tables | Exported TSV/biom duplicate data already in the `.qza`; regenerate with `qiime tools export`. |
+| `rep-seqs.qzv` (second tabulate-seqs) | `rep-seqs-dada2.qzv` | Identical viz produced twice; ship one. |
+| Non-`.qza`/`.qzv` files *inside* `core-metrics-results/` / `alpha-rarefaction-results/` | the `.qza`/`.qzv` in those dirs | `package_results` filters these dirs to `.qza`+`.qzv` (`_ignore_except`), so any `.tsv`/`.biom`/`.html`/log QIIME drops there is not shipped. |
+
+**Why files appear in two places in a run directory.** After writing an artifact
+to `output/…`, `link_output()` creates a **symlink** to it in `input/` (by
+basename). So e.g. `output/core-metrics-results/unweighted-unifrac-<col>-significance.qzv`
+also shows up as `input/unweighted-unifrac-<col>-significance.qzv`. There is only
+one real file; the `input/` entries are symlinks for the next step to read, and
+they are **not** part of the deliverable.
+
+**Within `core-metrics-results/` we intentionally keep all `.qza` + `.qzv`** —
+these are multiple *representations* (a distance matrix `.qza`, its PCoA `.qza`,
+the Emperor `.qzv`, and the group-significance `.qzv`), not duplicates of one
+file, and all are useful for viewing or re-analysis.
