@@ -9,6 +9,8 @@ import logging
 import datetime
 import subprocess
 import tempfile
+import tarfile
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 import time
 import json
@@ -301,9 +303,16 @@ def link_output(source, target_dir):
     target = sub_path # os.path.join( "../output" , filename)
 
     output_path = os.path.join(target_dir, filename)
-    if os.path.exists(output_path):
-        # os.remove(output_path)
-        logger.info('Output file already exists in input directory. Skipping')
+    # Use lexists (not exists): a *dangling* symlink from a prior run reports
+    # False under exists() but still occupies the name, so os.symlink would raise
+    # FileExistsError. Detect it via lexists and replace the stale link.
+    if os.path.lexists(output_path):
+        if os.path.islink(output_path) and not os.path.exists(output_path):
+            logger.debug('Replacing stale/broken symlink: {}'.format(output_path))
+            os.unlink(output_path)
+            os.symlink(target, output_path)
+        else:
+            logger.info('Output file already exists in input directory. Skipping')
     else:
         logger.debug('Creating symlink from {} to {}'.format(source, output_path))
         os.symlink(target , output_path )
@@ -315,6 +324,45 @@ def _sanitize_for_filename(name):
     unsanitized column name is still passed to --m-metadata-column."""
     safe = ''.join(c if (c.isalnum() or c in ('-', '_', '.')) else '_' for c in str(name))
     return safe or 'column'
+
+
+def read_metadata_columns(mapping_file):
+    """Return the list of column names from a QIIME mapping/metadata file header
+    (first line, tab-delimited)."""
+    with open(mapping_file) as f:
+        header = f.readline().rstrip('\r\n')
+    return header.split('\t')
+
+
+def _normalize_column_key(name):
+    """Loose key for fuzzy column matching: lowercase with spaces, underscores,
+    hyphens and dots removed. So 'Date_Plated', 'Date Plated' and 'date-plated'
+    all collapse to the same key."""
+    key = str(name).strip().lower()
+    for ch in (' ', '_', '-', '.'):
+        key = key.replace(ch, '')
+    return key
+
+
+def resolve_metadata_column(requested, available_columns):
+    """Resolve a user-requested metadata column against the mapping file header.
+
+    Exact match wins. Otherwise a normalized (case/space/underscore/hyphen-
+    insensitive) match is used if it is unambiguous. Raises ValueError if the
+    column cannot be found at all, or if normalization is ambiguous."""
+    if requested in available_columns:
+        return requested
+    req_key = _normalize_column_key(requested)
+    matches = [c for c in available_columns if _normalize_column_key(c) == req_key]
+    if len(matches) == 1:
+        logger.warning("Metadata column '%s' not found exactly; using closest match '%s'",
+                       requested, matches[0])
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError("Metadata column '{}' is ambiguous; it normalizes to multiple "
+                         "columns in the mapping file: {}".format(requested, matches))
+    raise ValueError("Metadata column '{}' not found in mapping file. Available columns: {}".format(
+        requested, available_columns))
 
 
 def run_diversity_analysis(base_dir, p_max_depth = 10000 , p_steps = 100, p_sampling_depth = 500 , group_by=None, results = {}):
@@ -792,6 +840,180 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
         link_output(os.path.join(phyla_table_dir, f'rel-phyla-table.{level}.tsv'), input_dir)
 
 
+# Curated "key results" for the shared deliverable bundle: data artifacts (.qza)
+# so recipients can do their own downstream analysis, plus their .qzv viewers.
+# Intermediates (paired-end-demux.qza, aligned/masked alignments, the classifier,
+# collapsed phyla tables) are intentionally excluded. Paths are relative to
+# output/; missing entries are skipped so partial runs still package. An entry
+# may be a list of alternative paths (first existing one wins) to tolerate layout
+# drift between the current pipeline and older/shell-path runs.
+DELIVERABLE_FILES = [
+    # feature (ASV) table
+    'table-dada2.qza', 'table-dada2.qzv',
+    # representative sequences
+    'rep-seqs-dada2.qza', 'rep-seqs-dada2.qzv',
+    # denoising stats
+    'stats-dada2.qza', 'stats-dada2.qzv',
+    # phylogeny
+    'rooted-tree.qza',
+    # taxonomy
+    'taxonomy.qza', 'taxonomy.qzv', 'taxa-bar-plots.qzv',
+    # demux summary (QC): current layout puts it in demux/, older runs are flat
+    [os.path.join('demux', 'demux-full.qzv'), 'demux-full.qzv'],
+]
+# Whole result directories shipped verbatim when present.
+DELIVERABLE_DIRS = ['core-metrics-results', 'alpha-rarefaction-results']
+
+
+def _md5sum(filepath, chunk_size=1 << 20):
+    """Return the hex md5 digest of a file, read in chunks (memory-safe for
+    large artifacts)."""
+    md5 = hashlib.md5()
+    with open(filepath, 'rb') as f:
+        for chunk in iter(lambda: f.read(chunk_size), b''):
+            md5.update(chunk)
+    return md5.hexdigest()
+
+
+def _qiime_version():
+    """Best-effort QIIME 2 version string; 'unknown' if qiime isn't callable."""
+    try:
+        out = subprocess.run(['qiime', '--version'], capture_output=True, text=True)
+        return (out.stdout or out.stderr).strip().replace('\n', ' ') or 'unknown'
+    except Exception:
+        return 'unknown'
+
+
+def write_manifest(deliverable_dir, base_dir, params=None):
+    """Write MANIFEST.txt into deliverable_dir: a self-describing header (run,
+    QIIME version, timestamp, parameters) plus an md5 + size table for every
+    file in the bundle. Returns the manifest path. The manifest checksums every
+    file present at call time, so write it BEFORE creating the tarball and after
+    all other files are copied in (it does not checksum itself)."""
+    manifest_path = os.path.join(deliverable_dir, 'MANIFEST.txt')
+
+    # Collect files (relative paths), skipping any pre-existing manifest.
+    entries = []
+    for root, _dirs, files in os.walk(deliverable_dir):
+        for fn in files:
+            full = os.path.join(root, fn)
+            rel = os.path.relpath(full, deliverable_dir)
+            if rel == 'MANIFEST.txt':
+                continue
+            entries.append(rel)
+    entries.sort()
+
+    run_name = os.path.basename(os.path.normpath(base_dir)) or 'qiime'
+    lines = []
+    lines.append('QIIME 2 pipeline deliverable manifest')
+    lines.append('=' * 60)
+    lines.append('Run:           {}'.format(run_name))
+    lines.append('Generated:     {}'.format(datetime.datetime.now().isoformat(timespec='seconds')))
+    lines.append('QIIME version: {}'.format(_qiime_version()))
+    if params:
+        lines.append('Parameters:')
+        for k in sorted(params):
+            lines.append('  {} = {}'.format(k, params[k]))
+    lines.append('')
+    lines.append('Per-artifact provenance (methods, parameters, versions, citations) '
+                 'is embedded inside each .qza/.qzv; open any .qzv at '
+                 'https://view.qiime2.org and see the Provenance tab.')
+    lines.append('')
+    lines.append('Files ({}):'.format(len(entries)))
+    lines.append('{:<32}  {:>12}  {}'.format('md5', 'bytes', 'path'))
+    lines.append('{:<32}  {:>12}  {}'.format('-' * 32, '-' * 12, '-' * 4))
+    for rel in entries:
+        full = os.path.join(deliverable_dir, rel)
+        lines.append('{:<32}  {:>12}  {}'.format(_md5sum(full), os.path.getsize(full), rel))
+
+    with open(manifest_path, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    return manifest_path
+
+
+def package_results(base_dir, fmt='both', params=None):
+    """Assemble a curated deliverable of key results (.qza artifacts + .qzv viewers
+    + metadata) under output/deliverable/, and optionally a .tar.gz alongside it.
+    Also writes MANIFEST.txt (md5 checksums + run info) into the bundle.
+
+    fmt:    'folder' (deliverable/ only), 'tar' (.tar.gz only), or 'both' (default).
+    params: optional dict of run parameters to record in the manifest header."""
+    if fmt not in ('folder', 'tar', 'both'):
+        raise ValueError("Invalid format {!r}: expected 'folder', 'tar', or 'both'".format(fmt))
+    if not os.path.exists(base_dir):
+        raise ValueError('Base directory does not exist')
+    output_dir = os.path.join(base_dir, 'output')
+    if not os.path.exists(output_dir):
+        raise ValueError('Output directory not found: {}. Run the workflow first.'.format(output_dir))
+
+    # Rebuild the bundle from scratch so stale files from a prior run can't linger
+    # in the folder, the tarball, or the manifest checksums.
+    deliverable_dir = os.path.join(output_dir, 'deliverable')
+    if os.path.exists(deliverable_dir):
+        shutil.rmtree(deliverable_dir)
+    os.makedirs(deliverable_dir)
+
+    copied = []
+
+    # Sample metadata: prefer output/metadata.tsv (written by current runs), else
+    # fall back to the run's mapping file so older runs still get metadata shipped.
+    meta_candidates = [os.path.join(output_dir, 'metadata.tsv'),
+                       os.path.join(base_dir, 'input', 'mapping.txt'),
+                       os.path.join(base_dir, 'mapping.txt')]
+    meta_src = next((p for p in meta_candidates if os.path.exists(p)), None)
+    if meta_src:
+        shutil.copyfile(meta_src, os.path.join(deliverable_dir, 'metadata.tsv'))
+        copied.append('metadata.tsv (from {})'.format(os.path.relpath(meta_src, base_dir)))
+    else:
+        logger.warning('Skipping metadata.tsv: no metadata.tsv or mapping file found')
+
+    for rel in DELIVERABLE_FILES:
+        alternatives = [rel] if isinstance(rel, str) else list(rel)
+        src = next((os.path.join(output_dir, a) for a in alternatives
+                    if os.path.exists(os.path.join(output_dir, a))), None)
+        if src:
+            # flatten into the bundle root (basenames are unique across the set)
+            shutil.copyfile(src, os.path.join(deliverable_dir, os.path.basename(src)))
+            copied.append(os.path.relpath(src, output_dir))
+        else:
+            logger.warning('Skipping missing deliverable item: {}'.format(alternatives[0]))
+
+    for rel in DELIVERABLE_DIRS:
+        src = os.path.join(output_dir, rel)
+        if os.path.isdir(src):
+            dst = os.path.join(deliverable_dir, rel)
+            if os.path.exists(dst):
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+            copied.append(rel + '/')
+        else:
+            logger.warning('Skipping missing deliverable directory: {}'.format(rel))
+
+    logger.info('Packaged {} item(s) into {}'.format(len(copied), deliverable_dir))
+
+    # Write the manifest last (after all files are in place) so it checksums the
+    # complete bundle, and before the tarball so it's included in the archive.
+    manifest = write_manifest(deliverable_dir, base_dir, params=params)
+    logger.info('Wrote manifest with checksums: {}'.format(manifest))
+
+    tarball = None
+    if fmt in ('tar', 'both'):
+        run_name = os.path.basename(os.path.normpath(base_dir)) or 'qiime'
+        tarball = os.path.join(output_dir, '{}-deliverable.tar.gz'.format(run_name))
+        with tarfile.open(tarball, 'w:gz') as tar:
+            tar.add(deliverable_dir, arcname='{}-deliverable'.format(run_name))
+        logger.info('Created archive: {}'.format(tarball))
+
+    # 'tar' means archive only: drop the staging folder so the on-disk result
+    # matches the documented contract.
+    if fmt == 'tar':
+        shutil.rmtree(deliverable_dir)
+        deliverable_dir = None
+
+    return {'deliverable_dir': deliverable_dir, 'tarball': tarball,
+            'items': copied, 'manifest': manifest}
+
+
 def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000, beta_group_significance_column=None , barcode_column_name='BarcodeSequence', group_by=None, n_threads=0, force=False):
     # Create output directory and raw data directory
   
@@ -804,6 +1026,28 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     input_dir = os.path.join(base_dir, 'input')
     output_dir = os.path.join(base_dir, 'output')
 
+    # Group demux outputs so shared results are easy to browse:
+    #   output/demux/           -> demux artifacts (.qza + .qzv)
+    #   output/viz/demux-full/  -> extracted HTML of demux-full.qzv
+    demux_dir = os.path.join(output_dir, 'demux')
+    viz_dir = os.path.join(output_dir, 'viz')
+    os.makedirs(demux_dir, exist_ok=True)
+    os.makedirs(viz_dir, exist_ok=True)
+
+    # Validate/normalize requested beta-diversity metadata columns up front, so a
+    # typo (e.g. Date_Plated vs 'Date Plated') fails fast here rather than after
+    # hours of demux/dada2. Resolves each to its actual column name.
+    if beta_group_significance_column:
+        requested_columns = ([beta_group_significance_column]
+                             if isinstance(beta_group_significance_column, str)
+                             else list(beta_group_significance_column))
+        mapping_file = os.path.join(input_dir, 'mapping.txt')
+        if not os.path.exists(mapping_file):
+            raise ValueError('Mapping file not found for metadata validation: {}'.format(mapping_file))
+        available_columns = read_metadata_columns(mapping_file)
+        beta_group_significance_column = [resolve_metadata_column(c, available_columns)
+                                          for c in requested_columns]
+        logger.info('Validated beta-diversity metadata columns: {}'.format(beta_group_significance_column))
 
     import_input_dir = os.path.join(input_dir ,'raw_data')
     import_output_name = 'paired-end-demux.qza'
@@ -842,8 +1086,18 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
 
     demux_output_name = 'demux-full.qza'
     demux_details_output_name = 'demux-details.qza'
-    demux_output = os.path.join(output_dir, demux_output_name)
-    demux_details_output = os.path.join(output_dir, demux_details_output_name)
+    demux_output = os.path.join(demux_dir, demux_output_name)
+    demux_details_output = os.path.join(demux_dir, demux_details_output_name)
+
+    # Reuse legacy flat-layout demux outputs (output/demux-full.qza) if present, so
+    # a run dir from before the demux/ reorg isn't needlessly re-demuxed.
+    legacy_demux_output = os.path.join(output_dir, demux_output_name)
+    legacy_demux_details_output = os.path.join(output_dir, demux_details_output_name)
+    if (not (os.path.exists(demux_output) and os.path.exists(demux_details_output))
+            and os.path.exists(legacy_demux_output) and os.path.exists(legacy_demux_details_output)):
+        logger.info('Using existing flat-layout demux outputs from {}'.format(output_dir))
+        demux_output = legacy_demux_output
+        demux_details_output = legacy_demux_details_output
 
     # check if outputs already exist, skip if they do unless force is set to True
     if os.path.exists(demux_output) and os.path.exists(demux_details_output):
@@ -869,7 +1123,7 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     # --o-visualization $OUTPUT_DIR/demux-full.qzv
 
     demux_viz_output_name = 'demux-full.qzv'
-    demux_viz_output = os.path.join(output_dir, demux_viz_output_name)
+    demux_viz_output = os.path.join(demux_dir, demux_viz_output_name)
 
     # check if output already exists, skip if it does unless force is set to True
     if os.path.exists(demux_viz_output):
@@ -884,12 +1138,38 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     
     link_output(demux_viz_output, input_dir)
 
+    # Run metadata tabulate on the demux error-correction details
+    # qiime metadata tabulate \
+    # --m-input-file $OUTPUT_DIR/demux-details.qza \
+    # --o-visualization $OUTPUT_DIR/demux-details.qzv
+
+    demux_details_viz_output_name = 'demux-details.qzv'
+    demux_details_viz_output = os.path.join(demux_dir, demux_details_viz_output_name)
+
+    # check if output already exists, skip if it does unless force is set to True
+    if os.path.exists(demux_details_viz_output):
+        logger.info('Demux details visualization output already exists. Skipping')
+    else:
+        logger.info('Running metadata tabulate on demux details')
+        logger.debug("Options: --m-input-file {} --o-visualization {}".format(demux_details_output, demux_details_viz_output))
+        results['demux_details_viz'] = subprocess.run(['qiime', 'metadata', 'tabulate',
+                                                       '--m-input-file', demux_details_output,
+                                                       '--o-visualization', demux_details_viz_output])
+        logger.debug('Demux details visualization output: {}'.format(results['demux_details_viz']))
+
+    # Guard the link: if metadata tabulate failed the .qzv won't exist, and this
+    # QC visualization is non-essential — warn rather than abort the workflow.
+    if os.path.exists(demux_details_viz_output):
+        link_output(demux_details_viz_output, input_dir)
+    else:
+        logger.warning('demux-details.qzv not created; skipping link (metadata tabulate may have failed)')
+
     # Export the demux visualization
     # qiime tools export \
     # --input-path $OUTPUT_DIR/demux-full.qzv \
     # --output-path $OUTPUT_DIR/demux-full
 
-    demux_viz_export_dir = os.path.join(output_dir, 'demux-full')
+    demux_viz_export_dir = os.path.join(viz_dir, 'demux-full')
 
     # check if output already exists, skip if it does unless force is set to True
     if os.path.exists(demux_viz_export_dir):
@@ -1009,11 +1289,47 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
 
     link_output(stats_viz_output, input_dir)
 
+    # Ship the sample metadata under its conventional QIIME name (metadata.tsv) so
+    # the shared output/ is self-contained. (The `setup` stage may also leave an
+    # output/mapping.txt, but run_workflow does not stage, so don't rely on it.)
+    # A real copy (not a symlink) so it survives detaching output/ from the run.
+    mapping_file = os.path.join(input_dir, 'mapping.txt')
+    metadata_output = os.path.join(output_dir, 'metadata.tsv')
+    if os.path.exists(metadata_output):
+        logger.info('metadata.tsv already exists in output directory. Skipping')
+    elif os.path.exists(mapping_file):
+        logger.info('Copying sample metadata to {}'.format(metadata_output))
+        shutil.copyfile(mapping_file, metadata_output)
+    else:
+        logger.warning('Mapping file not found, skipping metadata.tsv: {}'.format(mapping_file))
+
 
     run_phylogeny_analysis(base_dir, p_max_depth, p_steps)
     run_diversity_analysis(base_dir, p_max_depth, p_steps, p_sampling_depth , group_by=beta_group_significance_column)
     run_relative_abundance_of_taxonomy(base_dir)
 
+    # Assemble the shareable deliverable (key .qza artifacts + .qzv viewers +
+    # metadata). Best-effort: a packaging hiccup must not fail an otherwise
+    # complete run, so log and continue rather than raise.
+    # Only record parameters that carry information (drop None / unset defaults)
+    # so the manifest stays clean, matching the standalone `package` behavior.
+    manifest_params = {k: v for k, v in {
+        'p_trunc_len_f': p_trunc_len_f,
+        'p_trunc_len_r': p_trunc_len_r,
+        'p_sampling_depth': p_sampling_depth,
+        'p_max_depth': p_max_depth,
+        'p_steps': p_steps,
+        'beta_diversity_group_by': beta_group_significance_column,
+        'n_threads': n_threads,
+    }.items() if v not in (None, 0)}
+    try:
+        pkg = package_results(base_dir, params=manifest_params or None)
+        logger.info('Deliverable ready: {} ({} items)'.format(
+            pkg['deliverable_dir'] or pkg['tarball'], len(pkg['items'])))
+    except Exception:
+        # log full traceback so a genuine bug in packaging is diagnosable, while
+        # still not failing the (otherwise complete) run.
+        logger.exception('Packaging deliverable failed (run itself is complete)')
 
     logger.info('Workflow complete')
     # Run qiime metadata tabulate
@@ -1130,16 +1446,22 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
 
 def denoise_data(base_dir, p_trunc_len_f=0, p_trunc_len_r=0, n_threads=0, force=False):
     """Standalone dada2 denoise-paired step (same base_dir/input/output convention
-    as run_workflow). Expects output/demux-full.qza to exist from a prior demux."""
+    as run_workflow). Expects demux-full.qza to exist from a prior demux."""
     if not os.path.exists(base_dir):
         raise ValueError('Input directory does not exist')
 
     input_dir = os.path.join(base_dir, 'input')
     output_dir = os.path.join(base_dir, 'output')
 
-    demux_output = os.path.join(output_dir, 'demux-full.qza')
+    # run_workflow now writes demux artifacts under output/demux/; fall back to the
+    # legacy flat output/demux-full.qza so older run directories still work.
+    demux_output = os.path.join(output_dir, 'demux', 'demux-full.qza')
     if not os.path.exists(demux_output):
-        raise ValueError('Demultiplexed sequences not found: {}. Run demux first.'.format(demux_output))
+        legacy_demux_output = os.path.join(output_dir, 'demux-full.qza')
+        if os.path.exists(legacy_demux_output):
+            demux_output = legacy_demux_output
+        else:
+            raise ValueError('Demultiplexed sequences not found: {}. Run demux first.'.format(demux_output))
 
     denoise_output = os.path.join(output_dir, 'rep-seqs-dada2.qza')
     table_output = os.path.join(output_dir, 'table-dada2.qza')
@@ -1310,6 +1632,32 @@ def main():
     tool_parser.add_argument('name', type=str, help='Name of the tool')
     tool_parser.add_argument('args', nargs=argparse.REMAINDER  , default=["--help"] , help='Arguments for the tool')
 
+    # Package deliverable subparser
+    package_parser = subparsers.add_parser('package',
+        help='Assemble a curated deliverable of key results (.qza + .qzv + metadata)')
+    package_parser.add_argument('input_dir', type=str,
+        help='Base directory of a completed run (containing output/)')
+    package_parser.add_argument('--format', dest='format', default='both',
+        choices=['folder', 'tar', 'both'],
+        help='Produce a deliverable/ folder, a .tar.gz, or both (default: both)')
+    # Optional run parameters recorded in MANIFEST.txt (only those passed are
+    # listed; defaults are None so unset flags are omitted rather than guessed).
+    package_parser.add_argument('--p-trunc-len-f', dest='p_trunc_len_f', type=int, default=None,
+        help='Record forward truncation length in the manifest')
+    package_parser.add_argument('--p-trunc-len-r', dest='p_trunc_len_r', type=int, default=None,
+        help='Record reverse truncation length in the manifest')
+    package_parser.add_argument('--p-sampling-depth', dest='p_sampling_depth', type=int, default=None,
+        help='Record sampling depth in the manifest')
+    package_parser.add_argument('--p-max-depth', dest='p_max_depth', type=int, default=None,
+        help='Record alpha-rarefaction max depth in the manifest')
+    package_parser.add_argument('--p-steps', dest='p_steps', type=int, default=None,
+        help='Record alpha-rarefaction steps in the manifest')
+    package_parser.add_argument('--p-n-threads', dest='n_threads', type=int, default=None,
+        help='Record dada2 thread count in the manifest')
+    package_parser.add_argument('--beta-diversity-group-by', dest='beta_diversity_group_by',
+        action='append', default=None,
+        help='Record beta-diversity grouping column(s) in the manifest (repeatable)')
+
     # Run qiime subparser
     run_parser = subparsers.add_parser('run', help='Run QIIME')
 
@@ -1348,7 +1696,7 @@ def main():
                               performed")
 
     # Denoise subparser of run
-    denoise_parser.add_argument('input_dir', type=str, help='Input (base) directory containing output/demux-full.qza')
+    denoise_parser.add_argument('input_dir', type=str, help='Input (base) directory containing output/demux/demux-full.qza')
     denoise_parser.add_argument('--p-trunc-len-f', dest="p_trunc_len_f", type=int, default=0,
                                 help="Forward read truncation length (0 = no truncation)")
     denoise_parser.add_argument('--p-trunc-len-r', dest="p_trunc_len_r", type=int, default=0,
@@ -1398,6 +1746,12 @@ def main():
 
     if args.command == 'setup':
         stage_data(args.input_dir, args.output_dir)
+    elif args.command == 'package':
+        # Only record parameters the user actually passed (non-None).
+        param_keys = ['p_trunc_len_f', 'p_trunc_len_r', 'p_sampling_depth',
+                      'p_max_depth', 'p_steps', 'n_threads', 'beta_diversity_group_by']
+        params = {k: getattr(args, k) for k in param_keys if getattr(args, k) is not None}
+        package_results(args.input_dir, fmt=args.format, params=params or None)
     elif args.command == 'run':
         if args.subcommand == 'demux':
             demux_data(args.input_dir, args.output_dir, args.p_trunc_len_f, args.p_trunc_len_r)
