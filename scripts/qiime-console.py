@@ -867,8 +867,27 @@ DELIVERABLE_FILES = [
     # demux summary (QC): current layout puts it in demux/, older runs are flat
     [os.path.join('demux', 'demux-full.qzv'), 'demux-full.qzv'],
 ]
-# Whole result directories shipped verbatim when present.
+# Result directories shipped when present. Only data artifacts (.qza) and
+# visualizations (.qzv) are copied from them — we deliberately do NOT ship other
+# forms QIIME may drop alongside (e.g. exported .tsv/.biom that duplicate a .qza,
+# .html that duplicates a .qzv, or logs). This keeps the bundle to "vizzes + data"
+# and is future-proof if a QIIME version adds redundant files to these dirs.
 DELIVERABLE_DIRS = ['core-metrics-results', 'alpha-rarefaction-results']
+DELIVERABLE_DIR_EXTS = ('.qza', '.qzv')
+
+
+def _ignore_except(exts):
+    """shutil.copytree `ignore` callback: keep sub-directories and files whose
+    name ends in one of `exts`; ignore every other file."""
+    def _ignore(dirpath, names):
+        ignored = []
+        for n in names:
+            if os.path.isdir(os.path.join(dirpath, n)):
+                continue
+            if not n.lower().endswith(exts):
+                ignored.append(n)
+        return ignored
+    return _ignore
 
 
 def _md5sum(filepath, chunk_size=1 << 20):
@@ -990,8 +1009,12 @@ def package_results(base_dir, fmt='both', params=None):
             dst = os.path.join(deliverable_dir, rel)
             if os.path.exists(dst):
                 shutil.rmtree(dst)
-            shutil.copytree(src, dst)
-            copied.append(rel + '/')
+            # Copy only vizzes (.qzv) and data artifacts (.qza); skip redundant
+            # exported forms (.tsv/.biom/.html/logs) QIIME may leave here.
+            shutil.copytree(src, dst, ignore=_ignore_except(DELIVERABLE_DIR_EXTS))
+            kept = sum(len([f for f in files if f.lower().endswith(DELIVERABLE_DIR_EXTS)])
+                       for _root, _dirs, files in os.walk(dst))
+            copied.append('{}/ ({} .qza/.qzv)'.format(rel, kept))
         else:
             logger.warning('Skipping missing deliverable directory: {}'.format(rel))
 

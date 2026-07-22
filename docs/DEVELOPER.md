@@ -57,6 +57,10 @@ or dangling symlinks from prior runs (rather than crashing on `FileExistsError`)
 - `DELIVERABLE_FILES` / `DELIVERABLE_DIRS` (module constants) define the curated
   export set; entries may be a list of alternative paths (first existing wins) to
   tolerate layout drift (e.g. flat `demux-full.qzv` vs `demux/demux-full.qzv`).
+- `DELIVERABLE_DIRS` are copied with `ignore=_ignore_except(DELIVERABLE_DIR_EXTS)`
+  so only `.qza`+`.qzv` are shipped from them — redundant `.tsv`/`.biom`/`.html`/
+  logs QIIME may drop in those dirs are excluded (see the Redundancy section of
+  [PIPELINE.md](PIPELINE.md)).
 - `package_results` clears `deliverable/` before rebuilding (no stale files),
   validates `--format`, and for `--format tar` removes the staging folder.
 - `write_manifest` checksums every bundled file (md5), records run params +
