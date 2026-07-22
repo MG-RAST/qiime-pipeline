@@ -303,9 +303,16 @@ def link_output(source, target_dir):
     target = sub_path # os.path.join( "../output" , filename)
 
     output_path = os.path.join(target_dir, filename)
-    if os.path.exists(output_path):
-        # os.remove(output_path)
-        logger.info('Output file already exists in input directory. Skipping')
+    # Use lexists (not exists): a *dangling* symlink from a prior run reports
+    # False under exists() but still occupies the name, so os.symlink would raise
+    # FileExistsError. Detect it via lexists and replace the stale link.
+    if os.path.lexists(output_path):
+        if os.path.islink(output_path) and not os.path.exists(output_path):
+            logger.debug('Replacing stale/broken symlink: {}'.format(output_path))
+            os.unlink(output_path)
+            os.symlink(target, output_path)
+        else:
+            logger.info('Output file already exists in input directory. Skipping')
     else:
         logger.debug('Creating symlink from {} to {}'.format(source, output_path))
         os.symlink(target , output_path )
@@ -931,14 +938,20 @@ def package_results(base_dir, fmt='both', params=None):
 
     fmt:    'folder' (deliverable/ only), 'tar' (.tar.gz only), or 'both' (default).
     params: optional dict of run parameters to record in the manifest header."""
+    if fmt not in ('folder', 'tar', 'both'):
+        raise ValueError("Invalid format {!r}: expected 'folder', 'tar', or 'both'".format(fmt))
     if not os.path.exists(base_dir):
         raise ValueError('Base directory does not exist')
     output_dir = os.path.join(base_dir, 'output')
     if not os.path.exists(output_dir):
         raise ValueError('Output directory not found: {}. Run the workflow first.'.format(output_dir))
 
+    # Rebuild the bundle from scratch so stale files from a prior run can't linger
+    # in the folder, the tarball, or the manifest checksums.
     deliverable_dir = os.path.join(output_dir, 'deliverable')
-    os.makedirs(deliverable_dir, exist_ok=True)
+    if os.path.exists(deliverable_dir):
+        shutil.rmtree(deliverable_dir)
+    os.makedirs(deliverable_dir)
 
     copied = []
 
@@ -990,6 +1003,12 @@ def package_results(base_dir, fmt='both', params=None):
         with tarfile.open(tarball, 'w:gz') as tar:
             tar.add(deliverable_dir, arcname='{}-deliverable'.format(run_name))
         logger.info('Created archive: {}'.format(tarball))
+
+    # 'tar' means archive only: drop the staging folder so the on-disk result
+    # matches the documented contract.
+    if fmt == 'tar':
+        shutil.rmtree(deliverable_dir)
+        deliverable_dir = None
 
     return {'deliverable_dir': deliverable_dir, 'tarball': tarball,
             'items': copied, 'manifest': manifest}
@@ -1070,6 +1089,16 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     demux_output = os.path.join(demux_dir, demux_output_name)
     demux_details_output = os.path.join(demux_dir, demux_details_output_name)
 
+    # Reuse legacy flat-layout demux outputs (output/demux-full.qza) if present, so
+    # a run dir from before the demux/ reorg isn't needlessly re-demuxed.
+    legacy_demux_output = os.path.join(output_dir, demux_output_name)
+    legacy_demux_details_output = os.path.join(output_dir, demux_details_output_name)
+    if (not (os.path.exists(demux_output) and os.path.exists(demux_details_output))
+            and os.path.exists(legacy_demux_output) and os.path.exists(legacy_demux_details_output)):
+        logger.info('Using existing flat-layout demux outputs from {}'.format(output_dir))
+        demux_output = legacy_demux_output
+        demux_details_output = legacy_demux_details_output
+
     # check if outputs already exist, skip if they do unless force is set to True
     if os.path.exists(demux_output) and os.path.exists(demux_details_output):
         logger.info('Demux outputs already exist. Skipping')
@@ -1128,7 +1157,12 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
                                                        '--o-visualization', demux_details_viz_output])
         logger.debug('Demux details visualization output: {}'.format(results['demux_details_viz']))
 
-    link_output(demux_details_viz_output, input_dir)
+    # Guard the link: if metadata tabulate failed the .qzv won't exist, and this
+    # QC visualization is non-essential — warn rather than abort the workflow.
+    if os.path.exists(demux_details_viz_output):
+        link_output(demux_details_viz_output, input_dir)
+    else:
+        logger.warning('demux-details.qzv not created; skipping link (metadata tabulate may have failed)')
 
     # Export the demux visualization
     # qiime tools export \
@@ -1255,8 +1289,9 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
 
     link_output(stats_viz_output, input_dir)
 
-    # Copy the sample metadata into the output directory so the shared results
-    # are self-contained (input/mapping.txt is otherwise only read, never shipped).
+    # Ship the sample metadata under its conventional QIIME name (metadata.tsv) so
+    # the shared output/ is self-contained. (The `setup` stage may also leave an
+    # output/mapping.txt, but run_workflow does not stage, so don't rely on it.)
     # A real copy (not a symlink) so it survives detaching output/ from the run.
     mapping_file = os.path.join(input_dir, 'mapping.txt')
     metadata_output = os.path.join(output_dir, 'metadata.tsv')
@@ -1276,20 +1311,25 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     # Assemble the shareable deliverable (key .qza artifacts + .qzv viewers +
     # metadata). Best-effort: a packaging hiccup must not fail an otherwise
     # complete run, so log and continue rather than raise.
+    # Only record parameters that carry information (drop None / unset defaults)
+    # so the manifest stays clean, matching the standalone `package` behavior.
+    manifest_params = {k: v for k, v in {
+        'p_trunc_len_f': p_trunc_len_f,
+        'p_trunc_len_r': p_trunc_len_r,
+        'p_sampling_depth': p_sampling_depth,
+        'p_max_depth': p_max_depth,
+        'p_steps': p_steps,
+        'beta_diversity_group_by': beta_group_significance_column,
+        'n_threads': n_threads,
+    }.items() if v not in (None, 0)}
     try:
-        pkg = package_results(base_dir, params={
-            'p_trunc_len_f': p_trunc_len_f,
-            'p_trunc_len_r': p_trunc_len_r,
-            'p_sampling_depth': p_sampling_depth,
-            'p_max_depth': p_max_depth,
-            'p_steps': p_steps,
-            'beta_diversity_group_by': beta_group_significance_column,
-            'n_threads': n_threads,
-        })
+        pkg = package_results(base_dir, params=manifest_params or None)
         logger.info('Deliverable ready: {} ({} items)'.format(
-            pkg['deliverable_dir'], len(pkg['items'])))
-    except Exception as exc:
-        logger.warning('Packaging deliverable failed (run itself is complete): {}'.format(exc))
+            pkg['deliverable_dir'] or pkg['tarball'], len(pkg['items'])))
+    except Exception:
+        # log full traceback so a genuine bug in packaging is diagnosable, while
+        # still not failing the (otherwise complete) run.
+        logger.exception('Packaging deliverable failed (run itself is complete)')
 
     logger.info('Workflow complete')
     # Run qiime metadata tabulate
