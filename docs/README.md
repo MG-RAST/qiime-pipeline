@@ -13,6 +13,12 @@ Documentation for the QIIME 2 16S rRNA amplicon pipeline
 | **Maintainer** operating it | [MAINTAINER.md](MAINTAINER.md) | Environment, classifier, Docker, releases, roadmap |
 | Anyone needing the details | [PIPELINE.md](PIPELINE.md) | Flow diagram + full tool/input and output tables (source of truth) |
 
+## Browsable doc hub
+
+- [index.html](index.html) — a single-page documentation hub (all four guides inline,
+  flow diagram, tool/output reference, redundancy, review deck). Open it in a browser,
+  or serve `docs/` via GitHub Pages. Also published as a Claude Artifact.
+
 ## Presentation
 
 - [slides/review.md](slides/review.md) — Marp deck for a review presentation.
