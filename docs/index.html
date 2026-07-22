@@ -509,23 +509,37 @@ gg-13-8-99-515-806-nb-classifier.qza</code></pre>
 
     <section id="flow">
       <h2>Pipeline flow</h2>
-      <p class="section-note">Nine stages, in real execution order. Each step reads from
-        <span class="mono">input/</span> and writes to <span class="mono">output/</span>;
-        artifacts are symlinked back into <span class="mono">input/</span> for the next step.</p>
+      <p class="section-note">Steps run sequentially, but the <b>data flow is a DAG</b>:
+        DADA2's <span class="mono">table</span> and <span class="mono">rep-seqs</span> each
+        fan out to several steps, and the tree/table and taxonomy/table pairs converge
+        downstream. Each step reads from <span class="mono">input/</span> and writes to
+        <span class="mono">output/</span>, symlinked back for the next step.</p>
       <div class="diagram">
         <pre class="mermaid">
 flowchart TD
-    setup([setup: stage FASTQ + mapping + fetch classifier])
-    imp[import: EMPPairedEndSequences]
-    demux[demux emp-paired + summarize]
-    dada2[dada2 denoise-paired: table, rep-seqs, stats]
-    tree[phylogeny: align-to-tree-mafft-fasttree, rooted tree]
-    tax[classify-sklearn + taxonomy + taxa barplot]
-    core[diversity core-metrics-phylogenetic]
-    sig[alpha + beta group-significance, rarefaction]
-    rel[taxa collapse L1-7 + relative-frequency]
-    pkg([package: deliverable + tar.gz + MANIFEST])
-    setup --> imp --> demux --> dada2 --> tree --> tax --> core --> sig --> rel --> pkg
+    setup([setup]) --> imp[import: EMPPairedEndSequences]
+    imp --> demux[demux emp-paired + summarize] --> dada2[dada2 denoise-paired]
+    dada2 --> tbl[table-dada2]
+    dada2 --> seqs[rep-seqs-dada2]
+    dada2 --> stats[stats-dada2]
+    seqs --> tree[phylogeny: rooted-tree]
+    seqs --> tax[classify-sklearn: taxonomy]
+    seqs --> tseq[tabulate-seqs]
+    tbl --> core[core-metrics]
+    tree --> core
+    tbl --> rare[alpha-rarefaction]
+    tree --> rare
+    tbl --> bar[taxa barplot]
+    tax --> bar
+    tbl --> col[taxa collapse + rel-frequency]
+    tax --> col
+    core --> sig[alpha + beta group-significance]
+    bar --> pkg([package: deliverable + tar.gz + MANIFEST])
+    sig --> pkg
+    rare --> pkg
+    col --> pkg
+    stats --> pkg
+    tseq --> pkg
 </pre>
       </div>
       <div class="callout">

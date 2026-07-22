@@ -37,14 +37,17 @@ Amplicon microbiome pipeline · `scripts/qiime-console.py`
 ## Pipeline at a glance
 
 ```
-setup → import → demux → dada2 denoise
-      → phylogeny (+ taxonomy/classify/barplot)
-      → diversity (core-metrics, alpha/beta significance, rarefaction)
-      → relative abundance (collapse L1–7)
-      → package (deliverable/ + .tar.gz + MANIFEST)
+                        ┌─ phylogeny → rooted-tree ─┐
+dada2 denoise ─ rep-seqs ┼─ classify-sklearn → taxonomy ┐
+              │          └─ tabulate-seqs               │
+              └─ table ──┬─ core-metrics ← rooted-tree  │
+                         ├─ alpha-rarefaction ← tree    │
+                         ├─ taxa barplot ← taxonomy ────┘
+                         └─ taxa collapse ← taxonomy → package
 ```
 
-Full Mermaid diagram + tool/output tables: **[PIPELINE.md](../PIPELINE.md)**
+Steps run sequentially, but **data flow is a DAG** — `rep-seqs` and `table` each
+fan out; tree/table and taxonomy/table converge. Full diagram: **[PIPELINE.md](../PIPELINE.md)**
 
 ⚠ Taxonomy runs *inside* `run_phylogeny_analysis`, **before** diversity.
 
