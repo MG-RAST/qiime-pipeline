@@ -16,8 +16,10 @@ Documentation for the QIIME 2 16S rRNA amplicon pipeline
 ## Presentation
 
 - [slides/review.md](slides/review.md) — Marp deck for a review presentation.
-  Render with `marp docs/slides/review.md -o review.html` (or `.pdf`) if
-  `marp-cli` is installed; otherwise it reads fine as Markdown.
+  Pre-rendered alongside it: [review.html](slides/review.html),
+  [review.pdf](slides/review.pdf), [review.pptx](slides/review.pptx).
+  Regenerate with `marp docs/slides/review.md -o review.html` (or `--pdf` /
+  `--pptx`) if `marp-cli` is installed; the source reads fine as Markdown too.
 
 ## Keeping docs honest
 
