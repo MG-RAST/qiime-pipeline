@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QIIME 2 16S Pipeline — Documentation</title>
+<style>
+  :root {
+    --paper:#f4f7f5; --surface:#ffffff; --surface-2:#eef3f1;
+    --ink:#14201e; --ink-soft:#42524e; --muted:#6c7d78;
+    --line:#dbe4e0; --line-strong:#c4d0cb;
+    --accent:#0e6f68; --accent-ink:#0a534d; --accent-soft:#e0efec;
+    --exported-ink:#8a5a0f; --exported-bg:#f6ead1; --exported-line:#e4cd9c;
+    --internal-ink:#556561; --internal-bg:#e7edea; --internal-line:#d2ded9;
+    --font-display:"Charter","Bitstream Charter","Cambria",Georgia,"Times New Roman",serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --maxw:1080px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:#0b1211; --surface:#111a18; --surface-2:#16211e;
+      --ink:#e8efec; --ink-soft:#aebbb6; --muted:#7f908a;
+      --line:#22302b; --line-strong:#2c3d37;
+      --accent:#3bb7a9; --accent-ink:#5fcabd; --accent-soft:#10312d;
+      --exported-ink:#e2b661; --exported-bg:#2a2211; --exported-line:#4a3c1b;
+      --internal-ink:#a4b4ae; --internal-bg:#1a2421; --internal-line:#28352f;
+    }
+  }
+  :root[data-theme="light"] {
+    --paper:#f4f7f5; --surface:#ffffff; --surface-2:#eef3f1;
+    --ink:#14201e; --ink-soft:#42524e; --muted:#6c7d78;
+    --line:#dbe4e0; --line-strong:#c4d0cb;
+    --accent:#0e6f68; --accent-ink:#0a534d; --accent-soft:#e0efec;
+    --exported-ink:#8a5a0f; --exported-bg:#f6ead1; --exported-line:#e4cd9c;
+    --internal-ink:#556561; --internal-bg:#e7edea; --internal-line:#d2ded9;
+  }
+  :root[data-theme="dark"] {
+    --paper:#0b1211; --surface:#111a18; --surface-2:#16211e;
+    --ink:#e8efec; --ink-soft:#aebbb6; --muted:#7f908a;
+    --line:#22302b; --line-strong:#2c3d37;
+    --accent:#3bb7a9; --accent-ink:#5fcabd; --accent-soft:#10312d;
+    --exported-ink:#e2b661; --exported-bg:#2a2211; --exported-line:#4a3c1b;
+    --internal-ink:#a4b4ae; --internal-bg:#1a2421; --internal-line:#28352f;
+  }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--font-body); font-size:17px; line-height:1.65;
+    -webkit-font-smoothing:antialiased; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code, .mono { font-family:var(--font-mono); font-size:.86em;
+    background:var(--surface-2); padding:.08em .34em; border-radius:4px;
+    border:1px solid var(--line); }
+  h1,h2,h3 { font-family:var(--font-display); font-weight:600;
+    text-wrap:balance; letter-spacing:-.01em; line-height:1.15; }
+
+  .wrap { max-width:var(--maxw); margin:0 auto; padding:0 24px; }
+  .layout { display:grid; grid-template-columns:214px minmax(0,1fr);
+    gap:48px; max-width:var(--maxw); margin:0 auto; padding:0 24px 96px; }
+
+  /* Header */
+  header.top { border-bottom:1px solid var(--line); background:var(--surface);
+    position:sticky; top:0; z-index:20; backdrop-filter:saturate(1.2); }
+  .top-inner { display:flex; align-items:center; justify-content:space-between;
+    gap:16px; padding:14px 24px; max-width:var(--maxw); margin:0 auto; }
+  .brand { display:flex; align-items:center; gap:11px; font-weight:600;
+    font-family:var(--font-display); font-size:1.02rem; letter-spacing:-.01em; }
+  .glyph { width:30px; height:30px; flex:0 0 auto; }
+  .top-actions { display:flex; align-items:center; gap:8px; }
+  .btn { font:inherit; font-size:.82rem; color:var(--ink-soft);
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:7px; padding:7px 12px; cursor:pointer; display:inline-flex;
+    align-items:center; gap:7px; }
+  .btn:hover { border-color:var(--line-strong); color:var(--ink); }
+  .btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* Hero */
+  .hero { padding:64px 0 40px; border-bottom:1px solid var(--line); }
+  .eyebrow { font-size:.74rem; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent); font-weight:600; }
+  .eyebrow::after { content:""; display:block; width:38px; height:2px;
+    background:var(--accent); margin-top:10px; opacity:.6; }
+  .hero h1 { font-size:clamp(2.1rem,5vw,3rem); margin:.5em 0 .3em;
+    max-width:16ch; }
+  .lede { font-size:1.15rem; color:var(--ink-soft); max-width:60ch; margin:0; }
+  .facts { display:flex; flex-wrap:wrap; gap:12px; margin-top:30px; }
+  .fact { background:var(--surface); border:1px solid var(--line);
+    border-radius:10px; padding:12px 16px; min-width:150px; }
+  .fact .k { font-family:var(--font-mono); font-size:.72rem;
+    letter-spacing:.05em; color:var(--muted); text-transform:uppercase; }
+  .fact .v { font-family:var(--font-display); font-size:1.32rem; font-weight:600;
+    margin-top:2px; }
+
+  /* Sidebar nav */
+  nav.side { position:sticky; top:78px; align-self:start; font-size:.9rem;
+    max-height:calc(100vh - 96px); overflow:auto; }
+  nav.side .grp { font-size:.7rem; text-transform:uppercase; letter-spacing:.12em;
+    color:var(--muted); margin:20px 0 8px; font-weight:600; }
+  nav.side a { display:block; color:var(--ink-soft); padding:5px 0 5px 12px;
+    border-left:2px solid var(--line); }
+  nav.side a:hover { color:var(--accent); border-left-color:var(--accent);
+    text-decoration:none; }
+
+  main { min-width:0; padding-top:14px; }
+  section { padding:34px 0; border-bottom:1px solid var(--line); scroll-margin-top:74px; }
+  section:last-child { border-bottom:0; }
+  section > h2 { font-size:1.55rem; margin:0 0 6px; }
+  .section-note { color:var(--muted); font-size:.95rem; margin:0 0 20px; max-width:64ch; }
+  p { max-width:66ch; }
+
+  /* Audience cards */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+    gap:14px; margin-top:8px; }
+  .card { background:var(--surface); border:1px solid var(--line);
+    border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:6px; }
+  .card h3 { margin:0; font-size:1.08rem; }
+  .card .who { font-family:var(--font-mono); font-size:.7rem; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--accent); }
+  .card p { margin:0; font-size:.9rem; color:var(--ink-soft); max-width:none; }
+
+  /* Diagram */
+  .diagram { background:var(--surface); border:1px solid var(--line);
+    border-radius:12px; padding:20px; overflow-x:auto; }
+  pre.mermaid { margin:0; min-width:520px; text-align:center; }
+  .callout { display:flex; gap:12px; background:var(--accent-soft);
+    border:1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+    border-radius:10px; padding:14px 16px; margin-top:18px; font-size:.92rem;
+    color:var(--ink); }
+  .callout b { color:var(--accent-ink); }
+  .callout .mk { font-family:var(--font-display); font-weight:700; color:var(--accent);
+    flex:0 0 auto; }
+
+  /* Tables */
+  .tablecard { border:1px solid var(--line); border-radius:12px; overflow:hidden;
+    background:var(--surface); }
+  .scroll { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:.88rem; min-width:560px; }
+  th, td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--line);
+    vertical-align:top; }
+  thead th { background:var(--surface-2); font-family:var(--font-mono); font-weight:600;
+    font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+    position:sticky; top:0; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr:hover td { background:var(--surface-2); }
+  td .mono { white-space:nowrap; }
+
+  .pill { display:inline-block; font-family:var(--font-mono); font-size:.68rem;
+    font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+    padding:3px 9px; border-radius:999px; border:1px solid; white-space:nowrap; }
+  .pill.exp { color:var(--exported-ink); background:var(--exported-bg);
+    border-color:var(--exported-line); }
+  .pill.int { color:var(--internal-ink); background:var(--internal-bg);
+    border-color:var(--internal-line); }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin:0 0 16px; font-size:.85rem;
+    color:var(--ink-soft); }
+  .legend span { display:inline-flex; align-items:center; gap:8px; }
+
+  /* Redundancy list */
+  .redun { display:grid; gap:10px; margin-top:6px; }
+  .redun-row { display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
+    gap:14px; background:var(--surface); border:1px solid var(--line);
+    border-radius:10px; padding:12px 16px; }
+  .redun-row .drop { color:var(--internal-ink); }
+  .redun-row .keep { color:var(--exported-ink); font-weight:600; }
+  .redun-row .arrow { color:var(--muted); font-family:var(--font-mono); }
+  .redun-why { grid-column:1 / -1; font-size:.85rem; color:var(--muted);
+    border-top:1px dashed var(--line); padding-top:8px; margin-top:2px; }
+
+  /* Deck */
+  .slides { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+    gap:14px; }
+  .slide { background:var(--surface); border:1px solid var(--line);
+    border-radius:11px; padding:16px 18px; position:relative; }
+  .slide .n { font-family:var(--font-mono); font-size:.72rem; color:var(--accent);
+    letter-spacing:.05em; }
+  .slide h4 { font-family:var(--font-display); margin:4px 0 6px; font-size:1.02rem; }
+  .slide p { margin:0; font-size:.86rem; color:var(--ink-soft); max-width:none; }
+
+  footer { color:var(--muted); font-size:.85rem; padding:30px 0 0;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+  footer .mono { background:none; border:0; padding:0; }
+
+  /* Full guides (expandable) */
+  .guides { display:grid; gap:12px; }
+  details.guide { background:var(--surface); border:1px solid var(--line);
+    border-radius:12px; overflow:hidden; scroll-margin-top:74px; }
+  details.guide > summary { list-style:none; cursor:pointer; display:flex;
+    align-items:center; gap:12px; padding:16px 18px; font-family:var(--font-display);
+    font-size:1.14rem; font-weight:600; }
+  details.guide > summary::-webkit-details-marker { display:none; }
+  details.guide > summary:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+  details.guide > summary .who { font-family:var(--font-mono); font-size:.66rem;
+    text-transform:uppercase; letter-spacing:.08em; color:var(--accent);
+    background:var(--accent-soft); border:1px solid color-mix(in srgb,var(--accent) 22%,transparent);
+    padding:3px 8px; border-radius:6px; flex:0 0 auto; }
+  details.guide > summary .chev { margin-left:auto; color:var(--muted);
+    transition:transform .2s ease; flex:0 0 auto; }
+  details.guide[open] > summary .chev { transform:rotate(90deg); }
+  details.guide[open] > summary { border-bottom:1px solid var(--line); }
+  .prose { padding:8px 22px 22px; }
+  .prose h4 { font-size:1.05rem; margin:24px 0 8px; }
+  .prose h4:first-child { margin-top:10px; }
+  .prose p { margin:0 0 12px; color:var(--ink-soft); }
+  .prose ul, .prose ol { margin:0 0 14px; padding-left:22px; color:var(--ink-soft); }
+  .prose li { margin:5px 0; }
+  .prose li::marker { color:var(--muted); }
+  .prose > :last-child { margin-bottom:0; }
+  pre.code { background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 15px; overflow-x:auto; margin:0 0 14px; }
+  pre.code code { background:none; border:0; padding:0; font-size:.8rem;
+    line-height:1.55; color:var(--ink); white-space:pre; }
+  blockquote.note { margin:0 0 14px; padding:12px 16px; background:var(--accent-soft);
+    border-left:3px solid var(--accent); border-radius:0 8px 8px 0; font-size:.9rem;
+    color:var(--ink); }
+  blockquote.note b { color:var(--accent-ink); }
+  .prose table { margin:0 0 14px; }
+
+  @media (max-width:820px) {
+    .layout { grid-template-columns:1fr; gap:0; padding-bottom:64px; }
+    nav.side { display:none; }
+    body { font-size:16px; }
+  }
+  @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; transition:none !important; } }
+  html { scroll-behavior:smooth; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <svg class="glyph" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M8 4c0 6 16 6 16 12S8 22 8 28M24 4c0 6-16 6-16 12s16 6 16 12"
+          stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        <path d="M10.5 8h11M11.5 12h9M11.5 20h9M10.5 24h11" stroke="var(--accent)"
+          stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+      </svg>
+      QIIME 2 16S Pipeline
+    </div>
+    <div class="top-actions">
+      <a class="btn" href="https://github.com/MG-RAST/qiime-pipeline" target="_blank" rel="noopener">Repository</a>
+      <button class="btn" id="theme" type="button" aria-label="Toggle color theme">
+        <span id="theme-label">Theme</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="eyebrow">Microbiome analysis &middot; Documentation</div>
+    <h1>From raw 16S reads to a shareable community profile</h1>
+    <p class="lede">A QIIME 2 amplicon pipeline that takes multiplexed Illumina paired-end
+      reads through denoising, phylogeny, taxonomy, and diversity — and packages a
+      curated, checksummed deliverable for collaborators.</p>
+    <div class="facts">
+      <div class="fact"><div class="k">Protocol</div><div class="v">EMP paired-end</div></div>
+      <div class="fact"><div class="k">Features</div><div class="v">DADA2 ASVs</div></div>
+      <div class="fact"><div class="k">Reference</div><div class="v">Greengenes 13-8</div></div>
+      <div class="fact"><div class="k">Driver</div><div class="v mono" style="font-size:1rem">qiime-console.py</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="side" aria-label="Section navigation">
+    <div class="grp">Guides</div>
+    <a href="#audiences">Who is this for</a>
+    <a href="#guide-pi">PI guide</a>
+    <a href="#guide-user">User guide</a>
+    <a href="#guide-dev">Developer guide</a>
+    <a href="#guide-maint">Maintainer guide</a>
+    <div class="grp">Reference</div>
+    <a href="#flow">Pipeline flow</a>
+    <a href="#tools">Tools &amp; inputs</a>
+    <a href="#outputs">Outputs</a>
+    <a href="#redundancy">What we ship</a>
+    <a href="#provenance">Provenance</a>
+    <div class="grp">Present</div>
+    <a href="#deck">Review deck</a>
+  </nav>
+
+  <main>
+    <section id="audiences">
+      <h2>Who is this for</h2>
+      <p class="section-note">Four guides, each linking into one shared technical
+        reference (<span class="mono">docs/PIPELINE.md</span>). The full text of each is
+        inline below — expand to read.</p>
+      <div class="cards">
+        <div class="card">
+          <span class="who">PI / reviewer</span>
+          <h3>What it measures</h3>
+          <p>The scientific questions each result answers, and how provenance &amp; citations make the work reproducible.</p>
+        </div>
+        <div class="card">
+          <span class="who">User</span>
+          <h3>How to run it</h3>
+          <p>Setup, run, QC, and package — with every parameter, and the sampling-depth footgun called out.</p>
+        </div>
+        <div class="card">
+          <span class="who">Developer</span>
+          <h3>How it's built</h3>
+          <p>Stage functions, the input/output symlink pattern, packaging internals, and the gotchas.</p>
+        </div>
+        <div class="card">
+          <span class="who">Maintainer</span>
+          <h3>How to operate it</h3>
+          <p>Environment, classifier provisioning, Docker images, and the QIIME 1 → QIIME 2 roadmap.</p>
+        </div>
+      </div>
+
+      <div class="guides" style="margin-top:22px">
+        <details class="guide" id="guide-pi">
+          <summary><span class="who">PI</span> For Principal Investigators <span class="chev" aria-hidden="true">&#9656;</span></summary>
+          <div class="prose">
+            <p>A non-operational overview: what this pipeline measures, how to read the results, and why they are reproducible.</p>
+            <h4>What it does, scientifically</h4>
+            <p>The pipeline profiles the bacterial/archaeal community in each sample by sequencing the 16S rRNA gene (V4 region, 515F/806R primers). It uses the <b>Earth Microbiome Project</b> protocol and <b>QIIME 2</b>. Raw sequencing reads are denoised into <b>amplicon sequence variants (ASVs)</b> — exact sequences, finer resolution than traditional 97% OTUs — using DADA2, then classified against the Greengenes reference and summarized with standard diversity metrics.</p>
+            <h4>What each result answers</h4>
+            <div class="scroll"><table>
+              <thead><tr><th>Result</th><th>Question it answers</th><th>Where</th></tr></thead>
+              <tbody>
+                <tr><td><span class="mono">taxa-bar-plots.qzv</span></td><td>Who is present, and at what relative abundance, per sample/group?</td><td>Deliverable</td></tr>
+                <tr><td>Alpha diversity</td><td>How rich/even is each sample? (Shannon, Faith PD, evenness, observed features)</td><td>Deliverable</td></tr>
+                <tr><td>Alpha-group significance</td><td>Does within-sample diversity differ between metadata groups?</td><td><span class="mono">core-metrics-results/</span></td></tr>
+                <tr><td>Beta diversity + PCoA/Emperor</td><td>How different are whole communities between samples/groups? (Bray-Curtis, Jaccard, UniFrac)</td><td><span class="mono">core-metrics-results/</span></td></tr>
+                <tr><td>Beta-group significance (PERMANOVA)</td><td>Are between-group community differences statistically significant?</td><td><span class="mono">core-metrics-results/</span></td></tr>
+                <tr><td>Rarefaction curves</td><td>Did we sequence deeply enough to capture the diversity?</td><td>Deliverable</td></tr>
+                <tr><td>Feature table + rep-seqs</td><td>The raw ASV counts and sequences for any downstream re-analysis.</td><td>Deliverable</td></tr>
+              </tbody>
+            </table></div>
+            <h4>What you receive</h4>
+            <p>The shared bundle (<span class="mono">deliverable/</span> and a <span class="mono">.tar.gz</span>) contains the interpretable results <b>and</b> the underlying data artifacts, so collaborators can do their own downstream analysis: the ASV table, representative sequences, rooted tree, taxonomy, taxa bar plots, diversity results, denoising/QC summaries, the sample metadata, and a checksummed <span class="mono">MANIFEST.txt</span>. Intermediate working files are left out to keep the bundle small.</p>
+            <h4>Reproducibility &amp; provenance</h4>
+            <ul>
+              <li><b>Every result file carries its own provenance.</b> QIIME 2 <span class="mono">.qza</span>/<span class="mono">.qzv</span> files embed the complete chain of actions, parameters, and software versions used to produce them. Open any <span class="mono">.qzv</span> at view.qiime2.org &rarr; <b>Provenance</b> tab.</li>
+              <li><b>Citations are embedded too</b> (<span class="mono">citations.bib</span> inside each artifact) — the correct references for QIIME 2, DADA2, MAFFT/FastTree, UniFrac, and the Greengenes classifier for a methods section.</li>
+              <li><b>Bundle integrity</b> is recorded in <span class="mono">MANIFEST.txt</span> (md5 checksum + size per file, plus run parameters and QIIME version).</li>
+            </ul>
+            <h4>Key methods to cite</h4>
+            <p>QIIME 2 (Bolyen et al. 2019); DADA2 (Callahan et al. 2016); Greengenes 13-8 reference; MAFFT + FastTree for phylogeny; UniFrac for phylogenetic beta diversity. Exact versions are in each artifact's provenance.</p>
+          </div>
+        </details>
+
+        <details class="guide" id="guide-user">
+          <summary><span class="who">User</span> User Guide — how to run it <span class="chev" aria-hidden="true">&#9656;</span></summary>
+          <div class="prose">
+            <p>How to run the pipeline end to end.</p>
+            <h4>Prerequisites</h4>
+            <ul>
+              <li>A QIIME 2 environment on <span class="mono">PATH</span> (<span class="mono">conda activate scope-env</span> or a QIIME 2 amplicon install). The native <span class="mono">qiime</span>, plus <span class="mono">wget</span> and <span class="mono">biom</span>, must be callable.</li>
+              <li>Internet access for <span class="mono">setup</span> (downloads the classifier).</li>
+              <li>Roomy scratch space — DADA2/demux write large temp files (see <span class="mono">--tmpdir</span>).</li>
+            </ul>
+            <h4>1. Prepare inputs</h4>
+            <ul>
+              <li><b>Raw reads</b> — Illumina bcl2fastq "Undetermined" output, three files whose names contain <span class="mono">_R1_</span>, <span class="mono">_R2_</span>, and <span class="mono">_I1_</span>.</li>
+              <li><b>A mapping file</b> — tab-delimited QIIME metadata whose name contains <span class="mono">mapping</span>. It must have a <span class="mono">#Sample ID</span> column and a barcode column named <span class="mono">BarcodeSequence</span> (12 bp Golay barcodes for EMP).</li>
+            </ul>
+            <h4>2. Stage the run (<span class="mono">setup</span>)</h4>
+            <pre class="code"><code>python scripts/qiime-console.py setup /path/to/raw_source /path/to/base_dir</code></pre>
+            <p>This creates <span class="mono">base_dir/input/{raw_data,mapping.txt}</span>, renames the raw files to <span class="mono">forward/reverse/barcodes.fastq.gz</span>, and downloads the classifier into <span class="mono">input/</span>.</p>
+            <h4>3. Run the workflow</h4>
+            <pre class="code"><code>python scripts/qiime-console.py run workflow /path/to/base_dir \
+    --p-trunc-len-f 250 --p-trunc-len-r 250 \
+    --p-sampling-depth 20000 \
+    --beta-diversity-group-by Sample_Plate</code></pre>
+            <div class="scroll"><table>
+              <thead><tr><th>Flag</th><th>Default</th><th>Meaning</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">--p-trunc-len-f / -r</td><td class="mono">0</td><td>Truncate reads at this position (0 = none). Set from the demux quality plots.</td></tr>
+                <tr><td class="mono">--p-sampling-depth</td><td class="mono">20000</td><td><b>&#9888; Footgun:</b> every sample with fewer reads is dropped from diversity. Pick it from the summaries — don't accept the default blindly.</td></tr>
+                <tr><td class="mono">--p-max-depth</td><td class="mono">10000</td><td>Max depth for rarefaction curves.</td></tr>
+                <tr><td class="mono">--p-steps</td><td class="mono">10</td><td>Number of rarefaction steps.</td></tr>
+                <tr><td class="mono">--beta-diversity-group-by</td><td>none</td><td>Metadata column(s) for beta-group significance. Repeatable; validated up front.</td></tr>
+                <tr><td class="mono">--barcode-column-name</td><td class="mono">BarcodeSequence</td><td>Mapping column holding the barcodes.</td></tr>
+                <tr><td class="mono">--p-n-threads</td><td class="mono">0</td><td>DADA2 threads (0 = all cores).</td></tr>
+                <tr><td class="mono">--tmpdir</td><td>auto</td><td>Scratch dir for QIIME temp files; avoids small RAM-backed <span class="mono">/tmp</span>.</td></tr>
+              </tbody>
+            </table></div>
+            <h4>4. Check quality</h4>
+            <ul>
+              <li><span class="mono">output/demux/demux-full.qzv</span> — per-sample read counts and quality; use it to choose truncation lengths and a sensible sampling depth.</li>
+              <li><span class="mono">output/stats-dada2.qzv</span> — how many reads survived filtering, merging, and chimera removal per sample.</li>
+              <li>Open any <span class="mono">.qzv</span> by dragging it onto view.qiime2.org.</li>
+            </ul>
+            <h4>5. Package for sharing (automatic, or on demand)</h4>
+            <p><span class="mono">run workflow</span> already builds the deliverable. To (re)build it standalone:</p>
+            <pre class="code"><code>python scripts/qiime-console.py package /path/to/base_dir --format both \
+    --p-trunc-len-f 250 --p-trunc-len-r 250 --p-sampling-depth 20000 \
+    --beta-diversity-group-by Sample_Plate</code></pre>
+            <p><span class="mono">--format</span> is <span class="mono">folder</span>, <span class="mono">tar</span>, or <span class="mono">both</span> (default). Any parameter flags you pass are recorded in <span class="mono">MANIFEST.txt</span>.</p>
+            <h4>Running individual steps (advanced)</h4>
+            <pre class="code"><code>python scripts/qiime-console.py run demux   /path/to/base_dir   # import + demux + summarize
+python scripts/qiime-console.py run denoise /path/to/base_dir   # dada2 denoise-paired</code></pre>
+            <p>Normally you just run <span class="mono">run workflow</span>, which chains everything.</p>
+          </div>
+        </details>
+
+        <details class="guide" id="guide-dev">
+          <summary><span class="who">Dev</span> Developer Guide — how it's built <span class="chev" aria-hidden="true">&#9656;</span></summary>
+          <div class="prose">
+            <p>Code architecture of the QIIME 2 pipeline and how to extend it.</p>
+            <h4>Entry point</h4>
+            <p>Everything runs through <span class="mono">scripts/qiime-console.py</span>, an argparse CLI. <span class="mono">bin/qiime</span> &rarr; <span class="mono">scripts/qiime-consol.py</span> &rarr; <span class="mono">qiime-console.py</span> (two symlinks; note the truncated middle name).</p>
+            <div class="scroll"><table>
+              <thead><tr><th>Command</th><th>Function</th><th>Purpose</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">setup &lt;src&gt; &lt;base&gt;</td><td class="mono">stage_data</td><td>Discover/rename raw FASTQ, copy mapping, fetch classifier</td></tr>
+                <tr><td class="mono">run workflow &lt;base&gt;</td><td class="mono">run_workflow</td><td>Full pipeline (chains all stages + auto-package)</td></tr>
+                <tr><td class="mono">run demux &lt;base&gt;</td><td class="mono">demux_data</td><td>Standalone import + demux + summarize</td></tr>
+                <tr><td class="mono">run denoise &lt;base&gt;</td><td class="mono">denoise_data</td><td>Standalone DADA2 denoise-paired</td></tr>
+                <tr><td class="mono">package &lt;base&gt;</td><td class="mono">package_results</td><td>Build the shareable deliverable + manifest</td></tr>
+                <tr><td class="mono">tool &lt;name&gt; &lt;args&gt;</td><td class="mono">run_tool</td><td>Thin passthrough to <span class="mono">qiime</span></td></tr>
+              </tbody>
+            </table></div>
+            <h4>The input/output + link_output pattern</h4>
+            <p>Steps write to <span class="mono">output/</span> and read from <span class="mono">input/</span>. <span class="mono">link_output(src, input_dir)</span> symlinks each new <span class="mono">output/</span> artifact back into <span class="mono">input/</span> by basename, so the next step finds it there. It uses <span class="mono">os.path.lexists</span> to detect and replace stale or dangling symlinks from prior runs.</p>
+            <h4>Stage functions (call order)</h4>
+            <ol>
+              <li>import &rarr; demux &rarr; dada2 denoise &rarr; feature-table summarize / tabulate-seqs / stats tabulate.</li>
+              <li><b><span class="mono">run_phylogeny_analysis</span></b> — despite the name, runs the tree <b>and</b> a second tabulate-seqs (<span class="mono">rep-seqs.qzv</span>), classify-sklearn, taxonomy tabulate, and the taxa barplot. Taxonomy runs <em>before</em> diversity.</li>
+              <li><b><span class="mono">run_diversity_analysis</span></b> — core-metrics-phylogenetic, three alpha-group-significance calls, alpha-rarefaction, beta-group-significance (one per column).</li>
+              <li><b><span class="mono">run_relative_abundance_of_taxonomy</span></b> — taxa collapse levels 1–7, relative-frequency, export, biom convert.</li>
+              <li><b><span class="mono">package_results</span></b> (+ <span class="mono">write_manifest</span>) — best-effort, wrapped so a packaging failure never fails an otherwise-complete run.</li>
+            </ol>
+            <blockquote class="note"><b>Gotcha — alpha-rarefaction is coded twice, runs once.</b> Both <span class="mono">run_phylogeny_analysis</span> and <span class="mono">run_diversity_analysis</span> call it with the same output dir. Phylogeny runs first, so the diversity call hits the skip-if-exists guard. The other call is dead code, not a second run.</blockquote>
+            <h4>Packaging internals</h4>
+            <ul>
+              <li><span class="mono">DELIVERABLE_FILES</span> / <span class="mono">DELIVERABLE_DIRS</span> define the curated export set; entries may be a list of alternative paths (first existing wins) to tolerate layout drift.</li>
+              <li><span class="mono">DELIVERABLE_DIRS</span> are copied with <span class="mono">ignore=_ignore_except(DELIVERABLE_DIR_EXTS)</span> so only <span class="mono">.qza</span>+<span class="mono">.qzv</span> are shipped — redundant <span class="mono">.tsv</span>/<span class="mono">.biom</span>/<span class="mono">.html</span>/logs are excluded.</li>
+              <li><span class="mono">package_results</span> clears <span class="mono">deliverable/</span> before rebuilding, validates <span class="mono">--format</span>, and for <span class="mono">--format tar</span> removes the staging folder.</li>
+              <li><span class="mono">write_manifest</span> checksums every bundled file (md5), records run params + QIIME version, and is written before the tarball so it's archived.</li>
+            </ul>
+            <h4>Other internals</h4>
+            <ul>
+              <li><b><span class="mono">resolve_tmpdir</span></b> — picks a roomy, disk-backed temp dir and exports <span class="mono">TMPDIR</span>/<span class="mono">TMP</span>/<span class="mono">TEMP</span> so native <span class="mono">qiime</span> inherits it. Warns below <span class="mono">MIN_TMP_FREE_GB = 50</span>.</li>
+              <li><b>Metadata columns</b> — <span class="mono">read_metadata_columns</span> strips per-field whitespace and a leading <span class="mono">#</span>; <span class="mono">resolve_metadata_column</span> does exact-then-fuzzy matching so typos fail fast.</li>
+            </ul>
+            <h4>How to add a step</h4>
+            <ol>
+              <li>Write the artifact to <span class="mono">output/</span> with a skip-if-exists guard.</li>
+              <li><span class="mono">link_output(new_artifact, input_dir)</span> (guard the link if the step can fail).</li>
+              <li>If it should be shared, add it to <span class="mono">DELIVERABLE_FILES</span>/<span class="mono">DELIVERABLE_DIRS</span>.</li>
+              <li>Add a row to both tables in PIPELINE.md and re-run <span class="mono">scripts/check_docs_tables.py</span>.</li>
+            </ol>
+            <h4>Two-generation split</h4>
+            <ul>
+              <li><b>QIIME 2 (current):</b> <span class="mono">qiime-console.py</span> (authoritative), the shell scripts, <span class="mono">commands.txt</span>, and an in-progress CWL port.</li>
+              <li><b>QIIME 1 (legacy):</b> the OTU-based CWL workflows under <span class="mono">CWL/</span>, wrapping QIIME 1.9.1 scripts under <span class="mono">mgrast/qiime:1.0</span>.</li>
+            </ul>
+            <h4>Known issues &amp; recent fixes</h4>
+            <ul>
+              <li>Fixed: <span class="mono">run demux</span> works; <span class="mono">--barcode-column-name</span> honored; metadata headers trimmed; shell classifier name corrected <span class="mono">gg-18-8</span> &rarr; <span class="mono">gg-13-8</span>.</li>
+              <li>Tracked: remaining metadata-hardening items (issue #5).</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="guide" id="guide-maint">
+          <summary><span class="who">Maint</span> Maintainer Guide — how to operate it <span class="chev" aria-hidden="true">&#9656;</span></summary>
+          <div class="prose">
+            <p>Operational and release concerns.</p>
+            <h4>Runtime environment</h4>
+            <ul>
+              <li><b>QIIME 2</b> must be on <span class="mono">PATH</span> (<span class="mono">conda activate scope-env</span>, or a QIIME 2 amplicon distribution). The pipeline shells out to native <span class="mono">qiime</span> with no path resolution.</li>
+              <li>Also required on <span class="mono">PATH</span>: <b><span class="mono">wget</span></b> (classifier download) and <b><span class="mono">biom</span></b> (rel-abundance TSV export).</li>
+              <li><b>Python 3</b> for <span class="mono">qiime-console.py</span> (bytecode is 3.12).</li>
+              <li>Scratch space: DADA2/demux are I/O heavy — see <span class="mono">resolve_tmpdir</span> and <span class="mono">MIN_TMP_FREE_GB = 50</span>.</li>
+            </ul>
+            <h4>Classifier provisioning</h4>
+            <p><span class="mono">setup</span> fetches the Greengenes 13-8 515F/806R naive-Bayes classifier via <span class="mono">wget</span>:</p>
+            <pre class="code"><code>https://data.qiime2.org/classifiers/sklearn-1.4.2/greengenes/
+gg-13-8-99-515-806-nb-classifier.qza</code></pre>
+            <p>The URL is <b>pinned to sklearn 1.4.2</b> — it must match the scikit-learn version in the QIIME 2 environment, or <span class="mono">classify-sklearn</span> will error. When bumping QIIME 2, update this URL to the matching <span class="mono">sklearn-&lt;ver&gt;</span> path. No <span class="mono">.qza</span> classifiers are committed to the repo.</p>
+            <h4>Docker images (all legacy QIIME 1 / Python 2.7)</h4>
+            <div class="scroll"><table>
+              <thead><tr><th>File</th><th>Base</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">Dockerfile (root)</td><td class="mono">ubuntu:18.04</td><td>Active image; cwltool + QIIME 1 + matplotlib 2.0.2 (patched TkAgg&rarr;Agg)</td></tr>
+                <tr><td class="mono">Docker/Dockerfile.1.0.*</td><td>—</td><td>Pinned cwltool build, matplotlib 2.0.2</td></tr>
+                <tr><td class="mono">Docker/Dockerfile.1.1.*</td><td>—</td><td>Same, matplotlib 1.5.3</td></tr>
+                <tr><td class="mono">Docker/qiime.dockerfile</td><td class="mono">ubuntu:latest</td><td>Heavier apt set; pip install cwltool qiime</td></tr>
+              </tbody>
+            </table></div>
+            <p>The CWL v1 tools instead reference the external image <span class="mono">mgrast/qiime:1.0</span>. Note: <b>there is no Docker image for the QIIME 2 Python pipeline</b> — it runs from the conda/QIIME 2 environment.</p>
+            <h4>Repo housekeeping</h4>
+            <ul>
+              <li><b>Submodule:</b> <span class="mono">ebi-metagenomics-cwl</span> is declared but not checked out. Init only to regenerate CWL wrappers.</li>
+              <li><b>Tests:</b> only CWL job-input YAMLs under <span class="mono">tests/jobs/</span> — no test runner, referenced fixtures not committed.</li>
+              <li><b>Docs drift guard:</b> <span class="mono">scripts/check_docs_tables.py</span> verifies the PIPELINE.md tables still match the code; run it in CI or before tagging.</li>
+            </ul>
+            <h4>Release / versioning</h4>
+            <ul>
+              <li>Docker images follow <span class="mono">major.minor.build</span> where build is a timestamp.</li>
+              <li>No formal tag/release for the Python pipeline; changes land via PRs to <span class="mono">master</span>. Per-run QIIME version is captured in <span class="mono">MANIFEST.txt</span>.</li>
+            </ul>
+            <h4>Roadmap</h4>
+            <ul>
+              <li><b>QIIME 2 CWL port</b> in progress: <span class="mono">CWL/Tools/qiime2/import.cwl</span> and <span class="mono">scripts/wf.1.0.cwl</span> are the seed; <span class="mono">wf.1.2.cwl</span> is an empty stub.</li>
+              <li>Consolidate the legacy QIIME 1 CWL and shell scripts as the Python driver becomes the single source of truth.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="flow">
+      <h2>Pipeline flow</h2>
+      <p class="section-note">Nine stages, in real execution order. Each step reads from
+        <span class="mono">input/</span> and writes to <span class="mono">output/</span>;
+        artifacts are symlinked back into <span class="mono">input/</span> for the next step.</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TD
+    setup([setup: stage FASTQ + mapping + fetch classifier])
+    imp[import: EMPPairedEndSequences]
+    demux[demux emp-paired + summarize]
+    dada2[dada2 denoise-paired: table, rep-seqs, stats]
+    tree[phylogeny: align-to-tree-mafft-fasttree, rooted tree]
+    tax[classify-sklearn + taxonomy + taxa barplot]
+    core[diversity core-metrics-phylogenetic]
+    sig[alpha + beta group-significance, rarefaction]
+    rel[taxa collapse L1-7 + relative-frequency]
+    pkg([package: deliverable + tar.gz + MANIFEST])
+    setup --> imp --> demux --> dada2 --> tree --> tax --> core --> sig --> rel --> pkg
+</pre>
+      </div>
+      <div class="callout">
+        <span class="mk">!</span>
+        <div>Two things surprise readers: <b>taxonomy runs before diversity</b> (inside the
+          misleadingly-named <span class="mono">run_phylogeny_analysis</span>), and
+          <b>alpha-rarefaction is coded in two functions but runs once</b> (the second call
+          hits a skip-if-exists guard).</div>
+      </div>
+    </section>
+
+    <section id="tools">
+      <h2>Tools &amp; inputs</h2>
+      <p class="section-note">Every step is a native <span class="mono">qiime</span> command
+        run by the driver. Inputs are read from <span class="mono">input/</span> unless noted.</p>
+      <div class="tablecard scroll">
+        <table>
+          <thead><tr><th>Stage</th><th>Command</th><th>Key input</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>Import</td><td class="mono">tools import</td><td>raw FASTQ trio</td><td>Wrap EMP paired-end reads into an artifact</td></tr>
+            <tr><td>Demux</td><td class="mono">demux emp-paired</td><td>mapping.txt barcodes</td><td>Split reads per sample by barcode</td></tr>
+            <tr><td>Denoise</td><td class="mono">dada2 denoise-paired</td><td>demux-full.qza</td><td>Quality-filter &amp; call ASVs; table, rep-seqs, stats</td></tr>
+            <tr><td>Phylogeny</td><td class="mono">phylogeny align-to-tree-mafft-fasttree</td><td>rep-seqs-dada2.qza</td><td>MAFFT align &rarr; mask &rarr; FastTree &rarr; rooted tree</td></tr>
+            <tr><td>Classify</td><td class="mono">feature-classifier classify-sklearn</td><td>classifier + rep-seqs</td><td>Assign taxonomy to each ASV</td></tr>
+            <tr><td>Taxa plot</td><td class="mono">taxa barplot</td><td>table + taxonomy</td><td>Interactive stacked taxa bar plots</td></tr>
+            <tr><td>Diversity</td><td class="mono">diversity core-metrics-phylogenetic</td><td>tree + table + metadata</td><td>Rarefy + all core alpha/beta metrics + PCoA</td></tr>
+            <tr><td>Significance</td><td class="mono">diversity {alpha,beta}-group-significance</td><td>vectors / distance matrix</td><td>Test diversity differences between groups</td></tr>
+            <tr><td>Rarefaction</td><td class="mono">diversity alpha-rarefaction</td><td>table + tree</td><td>Curves showing depth adequacy</td></tr>
+            <tr><td>Rel. abundance</td><td class="mono">taxa collapse &middot; relative-frequency</td><td>table + taxonomy</td><td>Collapse to each rank; relative abundances</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="section-note" style="margin-top:14px">Non-QIIME inputs the user provides (or
+        <span class="mono">setup</span> fetches): the raw
+        <span class="mono">Undetermined_*_{R1,R2,I1}</span> FASTQ trio, a tab-delimited
+        <span class="mono">mapping.txt</span> with a <span class="mono">BarcodeSequence</span>
+        column, and the Greengenes <span class="mono">gg-13-8-99-515-806-nb-classifier.qza</span>.</p>
+    </section>
+
+    <section id="outputs">
+      <h2>Outputs</h2>
+      <p class="section-note">What the pipeline writes, and whether it travels in the shared
+        deliverable bundle.</p>
+      <div class="legend">
+        <span><span class="pill exp">Exported</span> in the shared bundle</span>
+        <span><span class="pill int">Internal</span> working product, not shared</span>
+      </div>
+      <div class="tablecard scroll">
+        <table>
+          <thead><tr><th>Artifact</th><th>Content</th><th>Class</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">table-dada2.qza / .qzv</td><td>ASV feature table (counts per sample)</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">rep-seqs-dada2.qza / .qzv</td><td>Representative ASV sequences</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">stats-dada2.qza / .qzv</td><td>DADA2 denoising statistics</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">rooted-tree.qza</td><td>Rooted phylogeny (for UniFrac)</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">taxonomy.qza / .qzv</td><td>Per-ASV taxonomic assignments</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">taxa-bar-plots.qzv</td><td>Interactive taxa bar plots</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">demux-full.qzv</td><td>Per-sample read-count &amp; quality QC</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">core-metrics-results/</td><td>Distance matrices, PCoA + Emperor, significance <span style="color:var(--muted)">(.qza + .qzv only)</span></td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">alpha-rarefaction-results/</td><td>Rarefaction-curve visualization</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">metadata.tsv &middot; MANIFEST.txt</td><td>Sample metadata &amp; md5 checksums</td><td><span class="pill exp">Exported</span></td></tr>
+            <tr><td class="mono">paired-end-demux.qza</td><td>Imported raw sequences</td><td><span class="pill int">Internal</span></td></tr>
+            <tr><td class="mono">demux/demux-details.qza / .qzv</td><td>Barcode error-correction details</td><td><span class="pill int">Internal</span></td></tr>
+            <tr><td class="mono">viz/demux-full/</td><td>Unpacked HTML of the demux QC viz</td><td><span class="pill int">Internal</span></td></tr>
+            <tr><td class="mono">aligned / masked / unrooted-tree.qza</td><td>Alignment &amp; unrooted phylogeny intermediates</td><td><span class="pill int">Internal</span></td></tr>
+            <tr><td class="mono">rep-seqs.qzv</td><td>Second tabulate-seqs viz (duplicate)</td><td><span class="pill int">Internal</span></td></tr>
+            <tr><td class="mono">phyla-table / rel-phyla-table.*</td><td>Collapsed &amp; relative-abundance rank tables (.qza/.tsv/biom)</td><td><span class="pill int">Internal</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="redundancy">
+      <h2>What we deliberately ship &mdash; and don't</h2>
+      <p class="section-note">QIIME emits the same result in several forms. The rule is
+        <b>vizzes (<span class="mono">.qzv</span>) + data artifacts (<span class="mono">.qza</span>),
+        nothing else</b>. Redundant forms stay out of the bundle.</p>
+      <div class="redun">
+        <div class="redun-row">
+          <span class="drop mono">viz/demux-full/ (HTML)</span>
+          <span class="arrow">&rarr;</span>
+          <span class="keep mono">demux-full.qzv</span>
+          <div class="redun-why">The <span class="mono">.qzv</span> <em>is</em> the HTML, zipped with provenance — view it at view.qiime2.org.</div>
+        </div>
+        <div class="redun-row">
+          <span class="drop mono">rel-phyla-table.*.tsv / biom</span>
+          <span class="arrow">&rarr;</span>
+          <span class="keep mono">.qza feature tables</span>
+          <div class="redun-why">Exported TSV/biom duplicate data already inside the <span class="mono">.qza</span>; regenerate on demand.</div>
+        </div>
+        <div class="redun-row">
+          <span class="drop mono">rep-seqs.qzv</span>
+          <span class="arrow">&rarr;</span>
+          <span class="keep mono">rep-seqs-dada2.qzv</span>
+          <div class="redun-why">The same visualization is produced twice; the bundle ships one.</div>
+        </div>
+        <div class="redun-row">
+          <span class="drop mono">non-.qza/.qzv inside result dirs</span>
+          <span class="arrow">&rarr;</span>
+          <span class="keep mono">.qza + .qzv only</span>
+          <div class="redun-why">Result directories are filtered on copy, so any stray <span class="mono">.tsv</span>/<span class="mono">.html</span>/log QIIME drops there is not shipped.</div>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:18px">
+        <span class="mk">&#8644;</span>
+        <div><b>Why a file appears in two places.</b> After writing an artifact, the driver
+          symlinks it by name into <span class="mono">input/</span> for the next step. So a
+          UniFrac significance <span class="mono">.qzv</span> lives once in
+          <span class="mono">core-metrics-results/</span> with a symlink in
+          <span class="mono">input/</span> — one real file, and the symlink is not part of the deliverable.</div>
+      </div>
+    </section>
+
+    <section id="provenance">
+      <h2>Provenance &amp; reproducibility</h2>
+      <p>Every <span class="mono">.qza</span>/<span class="mono">.qzv</span> embeds QIIME 2's
+        full provenance graph — the exact actions, parameters, plugin and framework versions,
+        and a <span class="mono">citations.bib</span>. Drag any <span class="mono">.qzv</span>
+        onto <a href="https://view.qiime2.org" target="_blank" rel="noopener">view.qiime2.org</a>
+        and read the <b>Provenance</b> tab.</p>
+      <p>At the bundle level, <span class="mono">MANIFEST.txt</span> records an md5 checksum and
+        byte size for every shipped file, plus the run parameters and QIIME version — so a shared
+        deliverable is both self-describing and verifiable on transfer.</p>
+    </section>
+
+    <section id="deck">
+      <h2>Review deck</h2>
+      <p class="section-note">The narrative used for the review presentation
+        (<span class="mono">docs/slides/review.md</span>, rendered to HTML / PDF / PPTX).</p>
+      <div class="slides">
+        <div class="slide"><div class="n">01</div><h4>The problem</h4><p>Raw multiplexed 16S reads &rarr; who is in each sample, and how do communities differ — reproducibly and shareably.</p></div>
+        <div class="slide"><div class="n">02</div><h4>The goal</h4><p>One driver from reads to results; DADA2 ASVs; a curated, checksummed deliverable.</p></div>
+        <div class="slide"><div class="n">03</div><h4>Inputs</h4><p>EMP FASTQ trio, a barcode mapping file, and a Greengenes classifier fetched at setup.</p></div>
+        <div class="slide"><div class="n">04</div><h4>Per-stage walkthrough</h4><p>Import &rarr; demux &rarr; denoise &rarr; phylogeny &rarr; taxonomy &rarr; diversity &rarr; relative abundance.</p></div>
+        <div class="slide"><div class="n">05</div><h4>Exported vs internal</h4><p>Interpretable results and data artifacts ship; intermediates and redundant forms don't.</p></div>
+        <div class="slide"><div class="n">06</div><h4>Packaging &amp; provenance</h4><p>A folder + tar.gz with MANIFEST checksums; per-artifact QIIME provenance travels along.</p></div>
+        <div class="slide"><div class="n">07</div><h4>QC &amp; interpretation</h4><p>Demux &amp; DADA2 summaries drive truncation and sampling-depth choices; diversity answers richness &amp; between-group differences.</p></div>
+        <div class="slide"><div class="n">08</div><h4>Roadmap</h4><p>QIIME 2 CWL port in progress; retire the legacy QIIME 1 path; Python driver as source of truth.</p></div>
+      </div>
+    </section>
+
+    <footer>
+      <span>QIIME 2 16S rRNA amplicon pipeline &middot; documentation</span>
+      <span class="mono">MG-RAST/qiime-pipeline</span>
+    </footer>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById('theme');
+    var label = document.getElementById('theme-label');
+    function current() {
+      var set = document.documentElement.getAttribute('data-theme');
+      if (set) return set;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    function sync() { label.textContent = current() === 'dark' ? 'Light' : 'Dark'; }
+    btn.addEventListener('click', function () {
+      var next = current() === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      sync();
+    });
+    sync();
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sync);
+
+    // Open a guide panel when its anchor is targeted (nav links / deep links).
+    function openTarget() {
+      var id = location.hash.slice(1);
+      if (!id) return;
+      var el = document.getElementById(id);
+      if (el && el.tagName === 'DETAILS') { el.open = true; el.scrollIntoView(); }
+    }
+    window.addEventListener('hashchange', openTarget);
+    openTarget();
+  })();
+</script>
+
+<!-- Mermaid renders the flow diagram when this file is opened in a browser.
+     (Inside a Claude Artifact the runtime provides Mermaid; this include is the
+     standalone fallback and is harmless there.) -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  (function () {
+    if (!window.mermaid) return;
+    var dark = (document.documentElement.getAttribute('data-theme')
+      || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+    window.mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'default' });
+  })();
+</script>
+</body>
+</html>
