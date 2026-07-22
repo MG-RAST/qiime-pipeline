@@ -1182,6 +1182,15 @@ def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 1000
     run_diversity_analysis(base_dir, p_max_depth, p_steps, p_sampling_depth , group_by=beta_group_significance_column)
     run_relative_abundance_of_taxonomy(base_dir)
 
+    # Assemble the shareable deliverable (key .qza artifacts + .qzv viewers +
+    # metadata). Best-effort: a packaging hiccup must not fail an otherwise
+    # complete run, so log and continue rather than raise.
+    try:
+        pkg = package_results(base_dir)
+        logger.info('Deliverable ready: {} ({} items)'.format(
+            pkg['deliverable_dir'], len(pkg['items'])))
+    except Exception as exc:
+        logger.warning('Packaging deliverable failed (run itself is complete): {}'.format(exc))
 
     logger.info('Workflow complete')
     # Run qiime metadata tabulate
