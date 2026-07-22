@@ -833,12 +833,13 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
 
 
 # Curated "key results" for the shared deliverable bundle: data artifacts (.qza)
-# so recipients can do their own downstream analysis, their .qzv viewers, and the
-# sample metadata. Intermediates (paired-end-demux.qza, aligned/masked alignments,
-# the classifier, collapsed phyla tables) are intentionally excluded. Paths are
-# relative to output/; missing entries are skipped so partial runs still package.
+# so recipients can do their own downstream analysis, plus their .qzv viewers.
+# Intermediates (paired-end-demux.qza, aligned/masked alignments, the classifier,
+# collapsed phyla tables) are intentionally excluded. Paths are relative to
+# output/; missing entries are skipped so partial runs still package. An entry
+# may be a list of alternative paths (first existing one wins) to tolerate layout
+# drift between the current pipeline and older/shell-path runs.
 DELIVERABLE_FILES = [
-    'metadata.tsv',
     # feature (ASV) table
     'table-dada2.qza', 'table-dada2.qzv',
     # representative sequences
@@ -849,8 +850,8 @@ DELIVERABLE_FILES = [
     'rooted-tree.qza',
     # taxonomy
     'taxonomy.qza', 'taxonomy.qzv', 'taxa-bar-plots.qzv',
-    # demux summary (QC)
-    os.path.join('demux', 'demux-full.qzv'),
+    # demux summary (QC): current layout puts it in demux/, older runs are flat
+    [os.path.join('demux', 'demux-full.qzv'), 'demux-full.qzv'],
 ]
 # Whole result directories shipped verbatim when present.
 DELIVERABLE_DIRS = ['core-metrics-results', 'alpha-rarefaction-results']
@@ -871,14 +872,29 @@ def package_results(base_dir, fmt='both'):
     os.makedirs(deliverable_dir, exist_ok=True)
 
     copied = []
+
+    # Sample metadata: prefer output/metadata.tsv (written by current runs), else
+    # fall back to the run's mapping file so older runs still get metadata shipped.
+    meta_candidates = [os.path.join(output_dir, 'metadata.tsv'),
+                       os.path.join(base_dir, 'input', 'mapping.txt'),
+                       os.path.join(base_dir, 'mapping.txt')]
+    meta_src = next((p for p in meta_candidates if os.path.exists(p)), None)
+    if meta_src:
+        shutil.copyfile(meta_src, os.path.join(deliverable_dir, 'metadata.tsv'))
+        copied.append('metadata.tsv (from {})'.format(os.path.relpath(meta_src, base_dir)))
+    else:
+        logger.warning('Skipping metadata.tsv: no metadata.tsv or mapping file found')
+
     for rel in DELIVERABLE_FILES:
-        src = os.path.join(output_dir, rel)
-        if os.path.exists(src):
+        alternatives = [rel] if isinstance(rel, str) else list(rel)
+        src = next((os.path.join(output_dir, a) for a in alternatives
+                    if os.path.exists(os.path.join(output_dir, a))), None)
+        if src:
             # flatten into the bundle root (basenames are unique across the set)
-            shutil.copyfile(src, os.path.join(deliverable_dir, os.path.basename(rel)))
-            copied.append(rel)
+            shutil.copyfile(src, os.path.join(deliverable_dir, os.path.basename(src)))
+            copied.append(os.path.relpath(src, output_dir))
         else:
-            logger.warning('Skipping missing deliverable item: {}'.format(rel))
+            logger.warning('Skipping missing deliverable item: {}'.format(alternatives[0]))
 
     for rel in DELIVERABLE_DIRS:
         src = os.path.join(output_dir, rel)
