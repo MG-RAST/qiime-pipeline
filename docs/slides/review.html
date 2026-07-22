@@ -35,13 +35,16 @@ driver, no packaged deliverable.</li>
 </section>
 </foreignObject></svg><svg data-marpit-svg="" viewBox="0 0 1280 720"><foreignObject width="1280" height="720"><section id="4" data-paginate="true" data-theme="default" lang="C" data-marpit-pagination="4" style="--paginate:true;--theme:default;" data-marpit-pagination-total="12">
 <h2 id="pipeline-at-a-glance">Pipeline at a glance</h2>
-<pre is="marp-pre" data-auto-scaling="downscale-only"><code>setup → import → demux → dada2 denoise
-      → phylogeny (+ taxonomy/classify/barplot)
-      → diversity (core-metrics, alpha/beta significance, rarefaction)
-      → relative abundance (collapse L1–7)
-      → package (deliverable/ + .tar.gz + MANIFEST)
+<pre is="marp-pre" data-auto-scaling="downscale-only"><code>                        ┌─ phylogeny → rooted-tree ─┐
+dada2 denoise ─ rep-seqs ┼─ classify-sklearn → taxonomy ┐
+              │          └─ tabulate-seqs               │
+              └─ table ──┬─ core-metrics ← rooted-tree  │
+                         ├─ alpha-rarefaction ← tree    │
+                         ├─ taxa barplot ← taxonomy ────┘
+                         └─ taxa collapse ← taxonomy → package
 </code></pre>
-<p>Full Mermaid diagram + tool/output tables: <strong><a href="../PIPELINE.md">PIPELINE.md</a></strong></p>
+<p>Steps run sequentially, but <strong>data flow is a DAG</strong> — <code>rep-seqs</code> and <code>table</code> each<br />
+fan out; tree/table and taxonomy/table converge. Full diagram: <strong><a href="../PIPELINE.md">PIPELINE.md</a></strong></p>
 <p>⚠ Taxonomy runs <em>inside</em> <code>run_phylogeny_analysis</code>, <strong>before</strong> diversity.</p>
 </section>
 </foreignObject></svg><svg data-marpit-svg="" viewBox="0 0 1280 720"><foreignObject width="1280" height="720"><section id="5" data-paginate="true" data-theme="default" lang="C" data-marpit-pagination="5" style="--paginate:true;--theme:default;" data-marpit-pagination-total="12">

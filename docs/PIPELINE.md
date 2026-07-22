@@ -49,28 +49,42 @@ regrouping. Two things surprise readers:
    `output/alpha-rarefaction-results/`; phylogeny runs first, so the diversity
    call hits the skip-if-exists guard. The duplicate call is effectively dead.
 
+Execution is sequential (steps run one after another), but the **data flow is a
+DAG** — DADA2's outputs fan out, and the tree/table and taxonomy/table pairs
+converge downstream:
+
 ```mermaid
 flowchart TD
-    setup([setup: stage FASTQ + mapping + fetch classifier])
-    imp[import: EMPPairedEndSequences]
-    demux[demux emp-paired + summarize + details + html]
-    dada2[dada2 denoise-paired: ASV table, rep-seqs, stats]
-    ftsum[feature-table summarize / tabulate-seqs / stats tabulate]
-    tree[phylogeny: align-to-tree-mafft-fasttree, rooted tree]
-    tax[classify-sklearn + taxonomy tabulate + taxa barplot]
-    core[diversity core-metrics-phylogenetic]
-    sig[alpha-group-significance x3 + alpha-rarefaction* + beta-group-significance]
-    rel[taxa collapse L1-7 + relative-frequency + export]
-    pkg([package: deliverable/ + tar.gz + MANIFEST])
-
-    setup --> imp --> demux --> dada2 --> ftsum
-    ftsum --> tree
-    tree --> tax
-    tax --> core
-    core --> sig
-    sig --> rel
-    rel --> pkg
+    setup([setup: stage FASTQ + mapping + classifier]) --> imp[import: EMPPairedEndSequences]
+    imp --> demux[demux emp-paired + summarize] --> dada2[dada2 denoise-paired]
+    dada2 --> tbl[table-dada2]
+    dada2 --> seqs[rep-seqs-dada2]
+    dada2 --> stats[stats-dada2]
+    seqs --> tree[phylogeny: rooted-tree]
+    seqs --> tax[classify-sklearn: taxonomy]
+    seqs --> tseq[tabulate-seqs]
+    tbl --> core[core-metrics-phylogenetic]
+    tree --> core
+    tbl --> rare[alpha-rarefaction]
+    tree --> rare
+    tbl --> bar[taxa barplot]
+    tax --> bar
+    tbl --> col[taxa collapse + relative-frequency]
+    tax --> col
+    core --> sig[alpha + beta group-significance]
+    bar --> pkg([package: deliverable + tar.gz + MANIFEST])
+    sig --> pkg
+    rare --> pkg
+    col --> pkg
+    stats --> pkg
+    tseq --> pkg
 ```
+
+Branch/converge points: `rep-seqs-dada2` feeds phylogeny, classify-sklearn, and
+tabulate-seqs; `table-dada2` feeds core-metrics, alpha-rarefaction, taxa barplot,
+feature-table summarize, and taxa collapse; `rooted-tree`+`table` converge into
+core-metrics and alpha-rarefaction; `taxonomy`+`table` converge into taxa barplot
+and taxa collapse; `package` bundles every exported artifact.
 
 *`run_phylogeny_analysis` contains both `tree` and `tax` (taxonomy runs before
 diversity). `alpha-rarefaction` is coded in two functions but runs once (see below).
