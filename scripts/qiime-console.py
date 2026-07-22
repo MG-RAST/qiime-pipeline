@@ -9,6 +9,7 @@ import logging
 import datetime
 import subprocess
 import tempfile
+import tarfile
 from concurrent.futures import ThreadPoolExecutor
 import time
 import json
@@ -831,6 +832,78 @@ def run_relative_abundance_of_taxonomy( base_dir , results = {}):
         link_output(os.path.join(phyla_table_dir, f'rel-phyla-table.{level}.tsv'), input_dir)
 
 
+# Curated "key results" for the shared deliverable bundle: data artifacts (.qza)
+# so recipients can do their own downstream analysis, their .qzv viewers, and the
+# sample metadata. Intermediates (paired-end-demux.qza, aligned/masked alignments,
+# the classifier, collapsed phyla tables) are intentionally excluded. Paths are
+# relative to output/; missing entries are skipped so partial runs still package.
+DELIVERABLE_FILES = [
+    'metadata.tsv',
+    # feature (ASV) table
+    'table-dada2.qza', 'table-dada2.qzv',
+    # representative sequences
+    'rep-seqs-dada2.qza', 'rep-seqs-dada2.qzv',
+    # denoising stats
+    'stats-dada2.qza', 'stats-dada2.qzv',
+    # phylogeny
+    'rooted-tree.qza',
+    # taxonomy
+    'taxonomy.qza', 'taxonomy.qzv', 'taxa-bar-plots.qzv',
+    # demux summary (QC)
+    os.path.join('demux', 'demux-full.qzv'),
+]
+# Whole result directories shipped verbatim when present.
+DELIVERABLE_DIRS = ['core-metrics-results', 'alpha-rarefaction-results']
+
+
+def package_results(base_dir, fmt='both'):
+    """Assemble a curated deliverable of key results (.qza artifacts + .qzv viewers
+    + metadata) under output/deliverable/, and optionally a .tar.gz alongside it.
+
+    fmt: 'folder' (deliverable/ only), 'tar' (.tar.gz only), or 'both' (default)."""
+    if not os.path.exists(base_dir):
+        raise ValueError('Base directory does not exist')
+    output_dir = os.path.join(base_dir, 'output')
+    if not os.path.exists(output_dir):
+        raise ValueError('Output directory not found: {}. Run the workflow first.'.format(output_dir))
+
+    deliverable_dir = os.path.join(output_dir, 'deliverable')
+    os.makedirs(deliverable_dir, exist_ok=True)
+
+    copied = []
+    for rel in DELIVERABLE_FILES:
+        src = os.path.join(output_dir, rel)
+        if os.path.exists(src):
+            # flatten into the bundle root (basenames are unique across the set)
+            shutil.copyfile(src, os.path.join(deliverable_dir, os.path.basename(rel)))
+            copied.append(rel)
+        else:
+            logger.warning('Skipping missing deliverable item: {}'.format(rel))
+
+    for rel in DELIVERABLE_DIRS:
+        src = os.path.join(output_dir, rel)
+        if os.path.isdir(src):
+            dst = os.path.join(deliverable_dir, rel)
+            if os.path.exists(dst):
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+            copied.append(rel + '/')
+        else:
+            logger.warning('Skipping missing deliverable directory: {}'.format(rel))
+
+    logger.info('Packaged {} item(s) into {}'.format(len(copied), deliverable_dir))
+
+    tarball = None
+    if fmt in ('tar', 'both'):
+        run_name = os.path.basename(os.path.normpath(base_dir)) or 'qiime'
+        tarball = os.path.join(output_dir, '{}-deliverable.tar.gz'.format(run_name))
+        with tarfile.open(tarball, 'w:gz') as tar:
+            tar.add(deliverable_dir, arcname='{}-deliverable'.format(run_name))
+        logger.info('Created archive: {}'.format(tarball))
+
+    return {'deliverable_dir': deliverable_dir, 'tarball': tarball, 'items': copied}
+
+
 def run_workflow(base_dir, p_trunc_len_f=0, p_trunc_len_r=0 , p_max_depth = 10000 , p_steps = 10000, p_sampling_depth = 10000, beta_group_significance_column=None , barcode_column_name='BarcodeSequence', group_by=None, n_threads=0, force=False):
     # Create output directory and raw data directory
   
@@ -1411,6 +1484,15 @@ def main():
     tool_parser.add_argument('name', type=str, help='Name of the tool')
     tool_parser.add_argument('args', nargs=argparse.REMAINDER  , default=["--help"] , help='Arguments for the tool')
 
+    # Package deliverable subparser
+    package_parser = subparsers.add_parser('package',
+        help='Assemble a curated deliverable of key results (.qza + .qzv + metadata)')
+    package_parser.add_argument('input_dir', type=str,
+        help='Base directory of a completed run (containing output/)')
+    package_parser.add_argument('--format', dest='format', default='both',
+        choices=['folder', 'tar', 'both'],
+        help='Produce a deliverable/ folder, a .tar.gz, or both (default: both)')
+
     # Run qiime subparser
     run_parser = subparsers.add_parser('run', help='Run QIIME')
 
@@ -1499,6 +1581,8 @@ def main():
 
     if args.command == 'setup':
         stage_data(args.input_dir, args.output_dir)
+    elif args.command == 'package':
+        package_results(args.input_dir, fmt=args.format)
     elif args.command == 'run':
         if args.subcommand == 'demux':
             demux_data(args.input_dir, args.output_dir, args.p_trunc_len_f, args.p_trunc_len_r)
